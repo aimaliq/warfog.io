@@ -2,6 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Solana Wallet Adapter - Dropdown wrapper must be full width */
+.wallet-adapter-dropdown {
+  width: 100%;
+}
+
+/* Main button styling */
+.wallet-adapter-button {
+  background-color: rgba(20, 83, 45, 0.4);
+  border: 2px solid #84cc16;
+  color: #a3e635;
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 12px 24px;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 20px rgba(132, 204, 22, 0.3);
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.wallet-adapter-button:hover:not([disabled]) {
+  background-color: rgba(20, 83, 45, 0.6);
+  box-shadow: 0 0 30px rgba(132, 204, 22, 0.5);
+}
+
+.wallet-adapter-button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Button content alignment */
+.wallet-adapter-button-start-icon,
+.wallet-adapter-button-end-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The dropdown menu when clicking connected wallet is fine - keep it */
+/* But hide the "More options/Less options" collapse button below the main button */
+button.wallet-adapter-button[aria-expanded] {
+  display: none;
+}
+
+/* Alternative: hide by the collapse class */
+.wallet-adapter-button-trigger-wrapper .wallet-adapter-collapse-button,
+.wallet-adapter-dropdown .wallet-adapter-collapse-button {
+  display: none;
+}
+
+/* Modal styling */
+.wallet-adapter-modal-wrapper {
+  background-color: rgba(0, 0, 0, 0.9);
+}
+
+.wallet-adapter-modal {
+  background-color: #0a0f0a;
+  border: 2px solid #84cc16;
+  border-radius: 4px;
+  box-shadow: 0 0 50px rgba(132, 204, 22, 0.5);
+}
+
+.wallet-adapter-modal-title {
+  color: #a3e635;
+  font-family: 'Courier New', monospace;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.wallet-adapter-modal-list {
+  background-color: transparent;
+}
+
+.wallet-adapter-modal-list-item {
+  background-color: rgba(20, 83, 45, 0.2);
+  border: 1px solid #14532d;
+  border-radius: 2px;
+  margin: 8px 0;
+  transition: all 0.3s ease;
+}
+
+.wallet-adapter-modal-list-item:hover {
+  background-color: rgba(20, 83, 45, 0.4);
+  border-color: #84cc16;
+  box-shadow: 0 0 20px rgba(132, 204, 22, 0.3);
+}
+
+/* Hide collapse button in modal */
+.wallet-adapter-modal-collapse-button {
+  display: none;
+}
+
+/* Always show all wallet options in modal */
+.wallet-adapter-modal-list-more {
+  display: block;
+  max-height: none;
+  opacity: 1;
+}
+
 @keyframes missile-up {
   0% {
     transform: translateY(0) translateX(0) scale(1);
@@ -119,4 +223,57 @@
 
 .animate-box-pulse-enemy {
   animation: box-pulse-enemy 400ms ease-in-out 3;
+}
+
+@keyframes border-run-1 {
+  0% {
+    stroke-dashoffset: 800;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes border-run-2 {
+  0% {
+    stroke-dashoffset: 800;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.btn-snake-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.btn-snake-wrapper svg {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.btn-snake-wrapper svg rect {
+  fill: none;
+  stroke-width: 3;
+  stroke-dasharray: 500, 350;
+  rx: 3;
+}
+
+.btn-snake-wrapper svg rect:first-child {
+  stroke: url(#gradient1);
+  stroke-dashoffset: 800;
+  animation: border-run-1 5s linear infinite;
+}
+
+.btn-snake-wrapper svg rect:last-child {
+  stroke: url(#gradient2);
+  stroke-dashoffset: 800;
+  animation: border-run-2 5s linear infinite 5s;
 }

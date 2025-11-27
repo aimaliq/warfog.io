@@ -1,0 +1,61 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+
+export const useGlobalRank = (playerId?: string, walletAddress?: string) => {
+  const [rank, setRank] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchGlobalRank = async () => {
+      // If no player ID or wallet, return null
+      if (!playerId && !walletAddress) {
+        setRank(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // Get all players ordered by wins (descending)
+        const { data: allPlayers, error } = await supabase
+          .from('players')
+          .select('id, wallet_address, total_wins')
+          .order('total_wins', { ascending: false });
+
+        if (error) throw error;
+
+        if (allPlayers) {
+          // Find the index of the current player
+          const playerIndex = allPlayers.findIndex(p => {
+            if (playerId) {
+              return p.id === playerId;
+            } else if (walletAddress) {
+              return p.wallet_address === walletAddress;
+            }
+            return false;
+          });
+
+          // Rank is index + 1 (1-based ranking)
+          if (playerIndex !== -1) {
+            setRank(playerIndex + 1);
+          } else {
+            setRank(null);
+          }
+        }
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching global rank:', error);
+        setRank(null);
+        setIsLoading(false);
+      }
+    };
+
+    fetchGlobalRank();
+
+    // Refresh rank every 60 seconds
+    const interval = setInterval(fetchGlobalRank, 60000);
+
+    return () => clearInterval(interval);
+  }, [playerId, walletAddress]);
+
+  return { rank, isLoading };
+};

@@ -1,6 +1,74 @@
 import { useState, useEffect, useCallback } from 'react';
 import { GameState, GamePhase, Base, Player } from '../types';
 import { FlagIcon } from './FlagIcon';
+import { supabase, updateLastPlayedAt } from '../lib/supabase';
+
+// Helper to create fresh bases
+const createBases = (): Base[] => [
+  { id: 0, hp: 2, isDestroyed: false },
+  { id: 1, hp: 2, isDestroyed: false },
+  { id: 2, hp: 2, isDestroyed: false },
+  { id: 3, hp: 2, isDestroyed: false },
+  { id: 4, hp: 2, isDestroyed: false },
+];
+
+// Helper function to update game results in database
+const updateGameResults = async (
+  winnerId: string,
+  loserId: string,
+  betAmount: number
+) => {
+  try {
+    // Skip if IDs are invalid (guest players)
+    if (!winnerId || winnerId.length < 20 || !loserId || loserId.length < 20) {
+      console.log('Skipping database update: guest player detected');
+      return;
+    }
+
+    // Calculate balance changes (winner gets 1.9x bet, loser loses 1x bet)
+    const winnerGain = betAmount * 1.9;
+    const loserLoss = betAmount * 1.0;
+
+    // Get current balances first
+    const { data: winnerData } = await supabase
+      .from('players')
+      .select('total_wins, game_balance')
+      .eq('id', winnerId)
+      .single();
+
+    const { data: loserData } = await supabase
+      .from('players')
+      .select('total_losses, game_balance')
+      .eq('id', loserId)
+      .single();
+
+    // Update winner balance and stats
+    if (winnerData) {
+      await supabase
+        .from('players')
+        .update({
+          total_wins: (winnerData.total_wins || 0) + 1,
+          game_balance: (winnerData.game_balance || 0) + winnerGain
+        })
+        .eq('id', winnerId);
+    }
+
+    // Update loser balance and stats
+    if (loserData) {
+      await supabase
+        .from('players')
+        .update({
+          total_losses: (loserData.total_losses || 0) + 1,
+          game_balance: Math.max(0, (loserData.game_balance || 0) - loserLoss) // Don't go negative
+        })
+        .eq('id', loserId);
+    }
+
+    console.log(`Game results updated: Winner ${winnerId} (+${winnerGain} SOL), Loser ${loserId} (-${loserLoss} SOL)`);
+  } catch (error) {
+    console.error('Error updating game results:', error);
+  }
+};
 
 interface BattleScreenProps {
   gameState: GameState;
@@ -42,7 +110,7 @@ const DamageNotification = ({ count, isPlayer }: { count: number; isPlayer: bool
     <div
       className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 animate-float-up pointer-events-none"
     >
-      <div className={`text-2xl font-black ${isPlayer ? 'text-red-500' : 'text-lime-500'} drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]`}>
+      <div className={`text-2xl font-black ${isPlayer ? 'text-lime-500' : 'text-red-500'} drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]`}>
         {count} SILO{count > 1 ? 'S' : ''} {isPlayer ? 'LOST' : 'DESTROYED'}
       </div>
     </div>
@@ -197,6 +265,10 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
       setSelectedDefenses([]);
       setSelectedTargets([]);
 
+      // Update last_played_at when game starts
+      updateLastPlayedAt(player.id);
+      updateLastPlayedAt(enemy.id);
+
       // Check if player has HP to allocate
       if (player.pendingHP > 0) {
         setIsAllocatingHP(true);
@@ -206,7 +278,7 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
         setMessage("TAP SILOS TO DEFEND & ATTACK");
       }
     }
-  }, [gameState.phase, gameState.currentTurn, player.pendingHP]);
+  }, [gameState.phase, gameState.currentTurn, player.pendingHP, player.id, enemy.id]);
 
   // Handle HP allocation
   const handleHPAllocation = (baseId: number) => {
@@ -433,6 +505,10 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
                     updatedPlayer2.losses += 1;
                     updatedPlayer1.gamesPlayed += 1;
                     updatedPlayer2.gamesPlayed += 1;
+
+                    // Update database with win/loss and balance changes
+                    const betAmount = 1.0; // Default bet amount (TODO: get from match data)
+                    updateGameResults(current.player1.id, current.player2.id, betAmount);
                  } else if (pDestroyed >= 3 && eDestroyed < 3) {
                     // Player 2 wins
                     winner = current.player2.id;
@@ -444,12 +520,18 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
                     updatedPlayer2.wins += 1;
                     updatedPlayer1.gamesPlayed += 1;
                     updatedPlayer2.gamesPlayed += 1;
+
+                    // Update database with win/loss and balance changes
+                    const betAmount2 = 1.0; // Default bet amount (TODO: get from match data)
+                    updateGameResults(current.player2.id, current.player1.id, betAmount2);
                  } else {
                     // Tie
                     winner = 'TIE';
                     winReason = 'TIE_HP';
                     updatedPlayer1.currentStreak = 0;
                     updatedPlayer2.currentStreak = 0;
+
+                    // No balance updates for ties
                  }
             }
 
@@ -488,15 +570,16 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
   // Game Over Screen
   if (gameState.phase === GamePhase.GAME_OVER) {
      const isWin = gameState.winner === player.id;
+     const isDraw = gameState.winner === 'TIE';
 
      return (
          <div className="flex flex-col items-center justify-center min-h-screen animate-pulse z-50 relative w-full px-4">
-             <h1 className={`text-5xl font-black mb-8 text-center ${isWin ? 'text-lime-500' : 'text-red-600'}`}>
-                 {isWin ? 'TARGET DESTROYED' : 'MISSION FAILED'}
+             <h1 className={`text-5xl font-black mb-8 text-center ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
+                 {isDraw ? 'TACTICAL STALEMATE' : isWin ? 'TARGET DESTROYED' : 'MISSION FAILED'}
              </h1>
 
              <div className="text-3xl mb-8 font-bold font-mono">
-                 {isWin ? '+1.9 SOL' : '-1.0 SOL'}
+                 {isDraw ? '0 SOL' : isWin ? '+1.9 SOL' : '-1.0 SOL'}
              </div>
              <div className="flex gap-8 mb-8">
                  <div className="text-center">
@@ -508,17 +591,57 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
                      <div className="text-4xl text-lime-500 font-black">{playerDestroyedCount}/5</div>
                  </div>
              </div>
-             <button
-                onClick={() => window.location.reload()}
-                className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
-             >RETURN TO LOBBY
-             </button>
+
+             {isDraw ? (
+               <>
+                 <button
+                    onClick={() => {
+                      // Reset game state for rematch
+                      setGameState(prev => ({
+                        ...prev,
+                        phase: GamePhase.PLANNING,
+                        currentTurn: 1,
+                        turnTimeLeft: 10000,
+                        winner: null,
+                        winReason: null,
+                        player1: {
+                          ...prev.player1,
+                          bases: createBases(),
+                          basesDestroyed: 0,
+                          totalHP: 10,
+                          pendingHP: 0,
+                        },
+                        player2: {
+                          ...prev.player2,
+                          bases: createBases(),
+                          basesDestroyed: 0,
+                          totalHP: 10,
+                          pendingHP: 0,
+                        }
+                      }));
+                    }}
+                    className="w-64 py-3 bg-yellow-900/40 border-2 border-yellow-400 text-yellow-400 font-bold hover:bg-yellow-900/60 transition-all mb-3"
+                 >REMATCH (0 SOL)
+                 </button>
+                 <button
+                    onClick={() => window.location.reload()}
+                    className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
+                 >RETURN TO LOBBY
+                 </button>
+               </>
+             ) : (
+               <button
+                  onClick={() => window.location.reload()}
+                  className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
+               >RETURN TO LOBBY
+               </button>
+             )}
 
              {/* Victory Streak Display */}
-             <div className={`w-64 px-8 py-4 border-2 ${isWin ? 'border-lime-400 bg-lime-900/20' : 'border-gray-700 bg-gray-900/20'}`}>
+             <div className={`w-64 px-8 py-4 border-2 ${isDraw ? 'border-yellow-400 bg-yellow-900/20' : isWin ? 'border-lime-400 bg-lime-900/20' : 'border-gray-700 bg-gray-900/20'}`}>
                <div className="text-center">
                  <div className="text-xs text-gray-400 tracking-widest">VICTORY STREAK</div>
-                 <div className={`text-3xl font-black font-mono ${isWin ? 'text-lime-500' : 'text-gray-600'}`}>
+                 <div className={`text-3xl font-black font-mono ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-gray-600'}`}>
                    {player.currentStreak}
                  </div>
                </div>
