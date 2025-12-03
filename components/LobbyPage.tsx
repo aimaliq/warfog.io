@@ -171,9 +171,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                     Select 2 silos to protect from enemy missiles. Hit silos lose 1 HP (2 HP each).
                   </p>
                   <div>
-                    <img 
-                      src="/src\defend GIF.gif" 
-                      alt="Defend mechanics" 
+                    <img
+                      src="/defend-mechanics.gif"
+                      alt="Defend mechanics"
                       className="w-full rounded-md"
                     />
                   </div>
@@ -191,9 +191,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                     Select 3 enemy silos to attack. Each destroyed silo grants you +1 HP to allocate on your defenses.
                   </p>
                   <div>
-                    <img 
-                      src="/src\attack GIF.gif" 
-                      alt="Attack mechanics" 
+                    <img
+                      src="/attack-mechanics.gif"
+                      alt="Attack mechanics"
                       className="w-full rounded-md"
                     />
                   </div>
