@@ -1,6 +1,75 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, GamePhase, Base, Player } from '../types';
 import { FlagIcon } from './FlagIcon';
+import { ShareVictory } from './ShareVictory';
+import { supabase, updateLastPlayedAt } from '../lib/supabase';
+
+// Helper to create fresh bases
+const createBases = (): Base[] => [
+  { id: 0, hp: 2, isDestroyed: false },
+  { id: 1, hp: 2, isDestroyed: false },
+  { id: 2, hp: 2, isDestroyed: false },
+  { id: 3, hp: 2, isDestroyed: false },
+  { id: 4, hp: 2, isDestroyed: false },
+];
+
+// Helper function to update game results in database
+const updateGameResults = async (
+  winnerId: string,
+  loserId: string,
+  betAmount: number
+) => {
+  try {
+    // Skip if IDs are invalid (guest players)
+    if (!winnerId || winnerId.length < 20 || !loserId || loserId.length < 20) {
+      console.log('Skipping database update: guest player detected');
+      return;
+    }
+
+    // Calculate balance changes (winner gets 1.9x bet, loser loses 1x bet)
+    const winnerGain = betAmount * 1.9;
+    const loserLoss = betAmount * 1.0;
+
+    // Get current balances first
+    const { data: winnerData } = await supabase
+      .from('players')
+      .select('total_wins, game_balance')
+      .eq('id', winnerId)
+      .single();
+
+    const { data: loserData } = await supabase
+      .from('players')
+      .select('total_losses, game_balance')
+      .eq('id', loserId)
+      .single();
+
+    // Update winner balance and stats
+    if (winnerData) {
+      await supabase
+        .from('players')
+        .update({
+          total_wins: (winnerData.total_wins || 0) + 1,
+          game_balance: (winnerData.game_balance || 0) + winnerGain
+        })
+        .eq('id', winnerId);
+    }
+
+    // Update loser balance and stats
+    if (loserData) {
+      await supabase
+        .from('players')
+        .update({
+          total_losses: (loserData.total_losses || 0) + 1,
+          game_balance: Math.max(0, (loserData.game_balance || 0) - loserLoss) // Don't go negative
+        })
+        .eq('id', loserId);
+    }
+
+    console.log(`Game results updated: Winner ${winnerId} (+${winnerGain} SOL), Loser ${loserId} (-${loserLoss} SOL)`);
+  } catch (error) {
+    console.error('Error updating game results:', error);
+  }
+};
 
 interface BattleScreenProps {
   gameState: GameState;
@@ -42,7 +111,7 @@ const DamageNotification = ({ count, isPlayer }: { count: number; isPlayer: bool
     <div
       className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 animate-float-up pointer-events-none"
     >
-      <div className={`text-2xl font-black ${isPlayer ? 'text-red-500' : 'text-lime-500'} drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]`}>
+      <div className={`text-2xl font-black ${isPlayer ? 'text-lime-500' : 'text-red-500'} drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]`}>
         {count} SILO{count > 1 ? 'S' : ''} {isPlayer ? 'LOST' : 'DESTROYED'}
       </div>
     </div>
@@ -81,7 +150,7 @@ const BaseIcon = ({
           ? 'border-gray-800 bg-gray-900/50 opacity-60 cursor-not-allowed'
           : isOwn
             ? isGlowing
-              ? 'border-yellow-400 bg-yellow-900/20 shadow-[0_0_20px_rgba(250,204,21,0.6)] animate-pulse scale-105'
+              ? 'border-yellow-400 border-3 bg-yellow-900/30 shadow-[0_0_40px_rgba(250,204,21,0.9)] animate-pulse scale-105 brightness-115'
               : isSelected
               ? 'border-lime-400 bg-lime-900/20 shadow-[0_0_15px_rgba(163,230,53,0.4)] scale-105'
               : 'border-lime-900 bg-black hover:border-lime-500 hover:brightness-125'
@@ -161,6 +230,14 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
   const [highlightedIcons, setHighlightedIcons] = useState<{ player: number[], enemy: number[] }>({ player: [], enemy: [] });
   const [iconsShrinking, setIconsShrinking] = useState<{ player: number[], enemy: number[] }>({ player: [], enemy: [] });
 
+  // Timer pop animation state
+  const [lastSecond, setLastSecond] = useState(-1);
+  const [isPopping, setIsPopping] = useState(false);
+  const popTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Matchmaking transition state
+  const [matchmakingStartTime, setMatchmakingStartTime] = useState<number | null>(null);
+
   // Helper to count destroyed bases
   const countDestroyed = (playerData: Player) => playerData.bases.filter(b => b.isDestroyed).length;
 
@@ -197,16 +274,230 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
       setSelectedDefenses([]);
       setSelectedTargets([]);
 
+      // Update last_played_at when game starts
+      updateLastPlayedAt(player.id);
+      updateLastPlayedAt(enemy.id);
+
       // Check if player has HP to allocate
       if (player.pendingHP > 0) {
         setIsAllocatingHP(true);
-        setMessage(`ALLOCATE +${player.pendingHP} HP - TAP A SILO TO RE-INFORCE`);
+        setMessage(`ALLOCATE +${player.pendingHP} HP - TAP A SILO`);
       } else {
         setIsAllocatingHP(false);
         setMessage("TAP SILOS TO DEFEND & ATTACK");
       }
     }
-  }, [gameState.phase, gameState.currentTurn, player.pendingHP]);
+  }, [gameState.phase, gameState.currentTurn, player.pendingHP, player.id, enemy.id]);
+
+  // Play beep sound using Web Audio API
+  const playBeep = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Beep configuration
+      oscillator.frequency.value = 900; // Hz - adjust for pitch
+      oscillator.type = 'sine'; // Clean sine wave
+
+      // Volume envelope (fade out quickly)
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+      // Play for 100ms
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (error) {
+      console.error('Error playing beep:', error);
+    }
+  }, []);
+
+  // Play victory sound - ascending pleasant tones
+  const playVictorySound = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6 - major chord ascending
+
+      notes.forEach((freq, index) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = freq;
+        oscillator.type = 'sine';
+
+        const startTime = audioContext.currentTime + (index * 0.15);
+        gainNode.gain.setValueAtTime(0.1, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.3);
+      });
+    } catch (error) {
+      console.error('Error playing victory sound:', error);
+    }
+  }, []);
+
+  // Play missiles launch sound - 3 rapid shots
+  const playMissilesSound = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+      // Create 3 rapid missile "whoosh" sounds
+      [0, 0.15, 0.3].forEach((delay) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Descending whoosh sound
+        const startTime = audioContext.currentTime + delay;
+        oscillator.frequency.setValueAtTime(800, startTime);
+        oscillator.frequency.exponentialRampToValueAtTime(100, startTime + 0.2);
+        oscillator.type = 'sawtooth';
+
+        // Volume envelope
+        gainNode.gain.setValueAtTime(0.3, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.2);
+      });
+    } catch (error) {
+      console.error('Error playing missiles sound:', error);
+    }
+  }, []);
+
+  // Play explosion sound - deep boom
+  const playExplosionSound = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+      // Low frequency rumble for explosion
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Deep boom that decays
+      oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 0.5);
+      oscillator.type = 'triangle';
+
+      // Sharp attack, slow decay
+      gainNode.gain.setValueAtTime(0.6, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (error) {
+      console.error('Error playing explosion sound:', error);
+    }
+  }, []);
+
+  // Play defeat sound - descending dramatic tones
+  const playDefeatSound = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const notes = [392, 349, 294, 220]; // G4, F4, D4, A3 - descending dramatic
+
+      notes.forEach((freq, index) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = freq;
+        oscillator.type = 'sawtooth'; // More dramatic than sine
+
+        const startTime = audioContext.currentTime + (index * 0.2);
+        gainNode.gain.setValueAtTime(0.1, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 1);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.4);
+      });
+    } catch (error) {
+      console.error('Error playing defeat sound:', error);
+    }
+  }, []);
+
+  // Timer pop animation - trigger when second changes
+  useEffect(() => {
+    const currentSec = Math.floor(gameState.turnTimeLeft / 1000);
+    if (currentSec !== lastSecond && gameState.phase === GamePhase.PLANNING) {
+      setLastSecond(currentSec);
+      setIsPopping(true);
+
+      // Play beep sound
+      playBeep();
+
+      // Clear any existing timer before setting a new one
+      if (popTimerRef.current) {
+        clearTimeout(popTimerRef.current);
+      }
+
+      // Set new timer to remove animation class after 300ms
+      popTimerRef.current = setTimeout(() => {
+        setIsPopping(false);
+        popTimerRef.current = null;
+      }, 300);
+    }
+  }, [gameState.turnTimeLeft, lastSecond, gameState.phase, playBeep]);
+
+  // Cleanup timer on unmount only
+  useEffect(() => {
+    return () => {
+      if (popTimerRef.current) {
+        clearTimeout(popTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Play victory/defeat sound when game ends
+  useEffect(() => {
+    if (gameState.phase === GamePhase.GAME_OVER) {
+      const isWin = gameState.winner === player.id;
+      const isDraw = gameState.winner === 'TIE';
+
+      // Don't play sound for draws
+      if (!isDraw) {
+        if (isWin) {
+          playVictorySound();
+        } else {
+          playDefeatSound();
+        }
+      }
+    }
+  }, [gameState.phase, gameState.winner, player.id, playVictorySound, playDefeatSound]);
+
+  // Auto-transition from MATCHMAKING to PLANNING after 2.5 seconds
+  useEffect(() => {
+    if (gameState.phase === GamePhase.MATCHMAKING) {
+      if (matchmakingStartTime === null) {
+        setMatchmakingStartTime(Date.now());
+      }
+
+      const transitionTimer = setTimeout(() => {
+        setGameState(prev => ({
+          ...prev,
+          phase: GamePhase.PLANNING,
+          turnTimeLeft: 10000
+        }));
+        setMatchmakingStartTime(null);
+      }, 2500);
+
+      return () => clearTimeout(transitionTimer);
+    }
+  }, [gameState.phase, matchmakingStartTime, setGameState]);
 
   // Handle HP allocation
   const handleHPAllocation = (baseId: number) => {
@@ -290,12 +581,14 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
     // Show missiles immediately
     setMissileTargets({ player: selectedTargets, enemy: enemyTargets });
     setShowMissiles(true);
+    playMissilesSound(); // Play missiles launch sound
 
     // After 1.5s: Impact + shake
     setTimeout(() => {
       setShake(true);
       setMessage("IMPACT CONFIRMED. ANALYZING DAMAGE.");
-      setTimeout(() => setShake(false), 500);
+      playExplosionSound(); // Play explosion sound on impact
+      setTimeout(() => setShake(false), 200);
 
       // Apply damage and calculate destructions
       setGameState(current => {
@@ -376,30 +669,40 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
 
         // Use functional setState to get the latest lastTurnDestructions
         setLastTurnDestructions(latest => {
-          const playerHighlights = latest.enemy > 0
-            ? Array.from({ length: latest.enemy }, (_, i) => latest.playerStartIndex + i)
+          // Clear any previous animations first
+          setHighlightedIcons({ player: [], enemy: [] });
+          setIconsShrinking({ player: [], enemy: [] });
+
+          // Calculate which boxes should be highlighted based on destructions THIS TURN
+          // latest.player = player bases destroyed by enemy -> highlight PLAYER's counter
+          // latest.enemy = enemy bases destroyed by player -> highlight ENEMY's counter
+          const playerHighlights = latest.player > 0
+            ? Array.from({ length: latest.player }, (_, i) => latest.playerStartIndex + i)
             : [];
-          const enemyHighlights = latest.player > 0
-            ? Array.from({ length: latest.player }, (_, i) => latest.enemyStartIndex + i)
+          const enemyHighlights = latest.enemy > 0
+            ? Array.from({ length: latest.enemy }, (_, i) => latest.enemyStartIndex + i)
             : [];
 
-          // Phase 1: Start box pulse animation
-          setHighlightedIcons({ player: playerHighlights, enemy: enemyHighlights });
+          // Only trigger animations if there were actual destructions
+          if (playerHighlights.length > 0 || enemyHighlights.length > 0) {
+            // Phase 1: Start box pulse animation
+            setHighlightedIcons({ player: playerHighlights, enemy: enemyHighlights });
 
-          // Phase 2: After box pulse completes (1200ms = 400ms * 3), start icon shrink
-          setTimeout(() => {
-            setIconsShrinking({ player: playerHighlights, enemy: enemyHighlights });
-
-            // Clear icon shrink after animation completes (600ms)
+            // Phase 2: After box pulse completes (1200ms = 400ms * 3), start icon shrink
             setTimeout(() => {
-              setIconsShrinking({ player: [], enemy: [] });
-            }, 600);
-          }, 1200);
+              setIconsShrinking({ player: playerHighlights, enemy: enemyHighlights });
 
-          // Clear box pulse highlights after animation completes (1200ms)
-          setTimeout(() => {
-            setHighlightedIcons({ player: [], enemy: [] });
-          }, 1200);
+              // Clear icon shrink after animation completes (600ms)
+              setTimeout(() => {
+                setIconsShrinking({ player: [], enemy: [] });
+              }, 600);
+            }, 1200);
+
+            // Clear box pulse highlights after animation completes (1200ms)
+            setTimeout(() => {
+              setHighlightedIcons({ player: [], enemy: [] });
+            }, 1200);
+          }
 
           return latest; // Return unchanged state
         });
@@ -433,6 +736,11 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
                     updatedPlayer2.losses += 1;
                     updatedPlayer1.gamesPlayed += 1;
                     updatedPlayer2.gamesPlayed += 1;
+
+                    // Update database with win/loss and balance changes (only for wagered matches)
+                    if (current.betAmount > 0) {
+                      updateGameResults(current.player1.id, current.player2.id, current.betAmount);
+                    }
                  } else if (pDestroyed >= 3 && eDestroyed < 3) {
                     // Player 2 wins
                     winner = current.player2.id;
@@ -444,12 +752,19 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
                     updatedPlayer2.wins += 1;
                     updatedPlayer1.gamesPlayed += 1;
                     updatedPlayer2.gamesPlayed += 1;
+
+                    // Update database with win/loss and balance changes (only for wagered matches)
+                    if (current.betAmount > 0) {
+                      updateGameResults(current.player2.id, current.player1.id, current.betAmount);
+                    }
                  } else {
                     // Tie
                     winner = 'TIE';
                     winReason = 'TIE_HP';
                     updatedPlayer1.currentStreak = 0;
                     updatedPlayer2.currentStreak = 0;
+
+                    // No balance updates for ties
                  }
             }
 
@@ -467,7 +782,7 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
         }, 2000);
       }, 200);
     }, 1500); // Close the 1.5s setTimeout
-  }, [selectedDefenses, selectedTargets, setGameState]); // Close the useCallback
+  }, [selectedDefenses, selectedTargets, setGameState, playMissilesSound, playExplosionSound]); // Close the useCallback
 
   const timeSec = Math.floor(gameState.turnTimeLeft / 1000);
   const timeMs = Math.floor((gameState.turnTimeLeft % 1000) / 10);
@@ -485,19 +800,125 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
   const greenValue = Math.round(230 - (colorProgress * (230 - 68)));
   const circleColor = `rgb(${redValue}, ${greenValue}, 53)`;
 
+  // Matchmaking Transition Screen
+  if (gameState.phase === GamePhase.MATCHMAKING) {
+    return (
+      <div className="flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative overflow-hidden" style={{ minHeight: 'calc(100vh - 80px)' }}>
+
+        {/* Enemy Section - Slide Down */}
+        <div className="w-full flex flex-col gap-2 animate-slide-down">
+          <div className="flex justify-between items-start px-1">
+            <div className="flex items-center gap-3">
+              <FlagIcon countryCode={enemy.countryFlag} width="48px" height="32px" />
+              <div>
+                <div className="text-red-500 font-bold tracking-wider text-sm md:text-base">
+                  {enemy.username}
+                </div>
+                <div className="text-[10px] text-red-800 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                  DETECTED
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Enemy Grid */}
+          <div className="relative mt-2">
+            <div className="flex justify-center gap-2 md:gap-6">
+              {enemy.bases.map(base => (
+                <div key={base.id} className="relative w-16 h-24 md:w-24 md:h-32 border-2 border-red-900/30 bg-black flex flex-col items-center justify-center">
+                  <div className="text-5xl md:text-6xl animate-spin-slow text-red-700">☢</div>
+                  <div className="absolute bottom-1 right-1 text-[8px] font-mono text-red-800">S-{base.id}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Enemy Stats Bar - Slide Left */}
+          <div className="w-full max-w-md mx-auto animate-slide-left">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[10px] text-red-700 font-bold tracking-wider">ENEMY INTEGRITY:</span>
+              <span className="text-[11px] text-red-500 font-bold font-mono">100%</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-900 border border-red-900/50 relative">
+              <div className="h-full bg-gradient-to-r from-red-900 to-red-500" style={{ width: '100%' }}></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Center Text */}
+        <div className="flex flex-col items-center justify-center gap-3 w-full z-20 my-2">
+          <div className="bg-black/90 border-2 border-yellow-400 px-4 py-2 md:px-6 md:py-3 text-yellow-400 font-black text-lg md:text-xl tracking-widest shadow-[0_0_40px_rgba(250,204,21,0.6)] animate-conflict-pulse">
+            CONFLICT IMMINENT...
+          </div>
+          <div className="text-gray-600 text-xs tracking-wider">
+            INITIALIZING TACTICAL SYSTEMS
+          </div>
+        </div>
+
+        {/* Player Section - Slide Up */}
+        <div className="w-full flex flex-col gap-2 justify-end animate-slide-up">
+
+          {/* Player Stats Bar - Slide Right */}
+          <div className="w-full max-w-md mx-auto animate-slide-right">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[10px] text-lime-700 font-bold tracking-wider">SYSTEMS INTEGRITY:</span>
+              <span className="text-[11px] text-lime-500 font-bold font-mono">100%</span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-900 border border-lime-900/50 relative">
+              <div className="h-full bg-gradient-to-r from-lime-900 to-lime-500" style={{ width: '100%' }}></div>
+            </div>
+          </div>
+
+          {/* Player Grid */}
+          <div className="relative mb-2">
+            <div className="flex justify-center gap-2 md:gap-6">
+              {player.bases.map(base => (
+                <div key={base.id} className="relative w-16 h-24 md:w-24 md:h-32 border-2 border-lime-900 bg-black flex flex-col items-center justify-center">
+                  <div className="absolute top-1 left-1 right-1 flex gap-0.5">
+                    {[...Array(2)].map((_, i) => (
+                      <div key={i} className="h-1 flex-1 bg-lime-500" />
+                    ))}
+                  </div>
+                  <div className="text-5xl md:text-6xl animate-spin-slow text-lime-500 mt-3">☢</div>
+                  <div className="absolute bottom-1 right-1 text-[8px] font-mono text-lime-800">S-{base.id}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Player Info */}
+          <div className="flex justify-between items-end px-1">
+            <div className="flex items-center gap-3">
+              <FlagIcon countryCode={player.countryFlag} width="48px" height="32px" />
+              <div>
+                <div className="text-lime-500 font-bold text-sm tracking-wider">{player.username}</div>
+                <div className="text-[9px] text-lime-800">COMMANDER STATUS: ONLINE</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Game Over Screen
   if (gameState.phase === GamePhase.GAME_OVER) {
      const isWin = gameState.winner === player.id;
+     const isDraw = gameState.winner === 'TIE';
+     const isFreeMatch = gameState.betAmount === 0;
 
      return (
          <div className="flex flex-col items-center justify-center min-h-screen animate-pulse z-50 relative w-full px-4">
-             <h1 className={`text-5xl font-black mb-8 text-center ${isWin ? 'text-lime-500' : 'text-red-600'}`}>
-                 {isWin ? 'TARGET DESTROYED' : 'MISSION FAILED'}
+             <h1 className={`text-5xl font-black mb-8 text-center ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
+                 {isDraw ? 'TACTICAL STALEMATE' : isWin ? 'TARGET DESTROYED' : 'MISSION FAILED'}
              </h1>
 
-             <div className="text-3xl mb-8 font-bold font-mono">
-                 {isWin ? '+1.9 SOL' : '-1.0 SOL'}
-             </div>
+             {!isFreeMatch && (
+               <div className="text-3xl mb-8 font-bold font-mono">
+                   {isDraw ? '0 SOL' : isWin ? `+${(gameState.betAmount * 1.9).toFixed(1)} SOL` : `-${gameState.betAmount.toFixed(1)} SOL`}
+               </div>
+             )}
              <div className="flex gap-8 mb-8">
                  <div className="text-center">
                      <div className="text-xs text-lime-500 mb-1">SILOS DESTROYED</div>
@@ -508,17 +929,67 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
                      <div className="text-4xl text-lime-500 font-black">{playerDestroyedCount}/5</div>
                  </div>
              </div>
-             <button
-                onClick={() => window.location.reload()}
-                className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
-             >RETURN TO LOBBY
-             </button>
+
+             {/* Share Victory - Only for wins and registered users */}
+             {isWin && !player.isGuest && (
+               <ShareVictory
+                 player={player}
+                 enemy={enemy}
+                 betAmount={gameState.betAmount}
+                 basesDestroyed={enemyDestroyedCount}
+               />
+             )}
+
+             {isDraw ? (
+               <>
+                 <button
+                    onClick={() => {
+                      // Reset game state for rematch
+                      setGameState(prev => ({
+                        ...prev,
+                        phase: GamePhase.PLANNING,
+                        currentTurn: 1,
+                        turnTimeLeft: 10000,
+                        winner: null,
+                        winReason: null,
+                        player1: {
+                          ...prev.player1,
+                          bases: createBases(),
+                          basesDestroyed: 0,
+                          totalHP: 10,
+                          pendingHP: 0,
+                        },
+                        player2: {
+                          ...prev.player2,
+                          bases: createBases(),
+                          basesDestroyed: 0,
+                          totalHP: 10,
+                          pendingHP: 0,
+                        }
+                      }));
+                    }}
+                    className="w-64 py-3 bg-yellow-900/40 border-2 border-yellow-400 text-yellow-400 font-bold hover:bg-yellow-900/60 transition-all mb-3"
+                 >{isFreeMatch ? 'REMATCH' : 'REMATCH (0 SOL)'}
+                 </button>
+                 <button
+                    onClick={() => window.location.reload()}
+                    className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
+                 >RETURN TO LOBBY
+                 </button>
+               </>
+             ) : (
+               <button
+                  onClick={() => window.location.reload()}
+                  className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
+               >RETURN TO LOBBY
+               </button>
+             )}
 
              {/* Victory Streak Display */}
-             <div className={`w-64 px-8 py-4 border-2 ${isWin ? 'border-lime-400 bg-lime-900/20' : 'border-gray-700 bg-gray-900/20'}`}>
+             <div className={`w-64 px-8 py-4 border-2 ${isDraw ? 'border-yellow-400 bg-yellow-900/20' : isWin ? 'border-lime-400 bg-lime-900/20' : 'border-gray-700 bg-gray-900/20'}`}>
                <div className="text-center">
                  <div className="text-xs text-gray-400 tracking-widest">VICTORY STREAK</div>
-                 <div className={`text-3xl font-black font-mono ${isWin ? 'text-lime-500' : 'text-gray-600'}`}>
+                 <div className={`text-3xl font-black font-mono ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-gray-600'}`}>
                    {player.currentStreak}
                  </div>
                </div>
@@ -528,7 +999,7 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
   }
 
   return (
-    <div className={`flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative ${shake ? 'translate-x-1 translate-y-1' : ''}`} style={{ minHeight: 'calc(100vh - 80px)' }}>
+    <div className={`flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative ${shake ? 'animate-screen-shake' : ''}`} style={{ minHeight: 'calc(100vh - 80px)' }}>
 
       {/* --- TOP SECTION: ENEMY --- */}
       <div className="w-full flex flex-col gap-2">
@@ -544,6 +1015,13 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
                 <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                 LIVE
               </div>
+            </div>
+          </div>
+
+          {/* Turn Counter */}
+          <div className="text-right opacity-85">
+            <div className="text-gray-400 font-bold font-mono tracking-wider">
+              <span className="text-lg">TURN</span> <span className="text-2xl">{gameState.currentTurn}</span>
             </div>
           </div>
         </div>
@@ -631,7 +1109,7 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <div
-                className={`text-4xl font-black font-mono leading-none ${isUrgent ? 'animate-pulse' : ''}`}
+                className={`text-4xl font-black font-mono leading-none ${isPopping ? 'animate-timer-pop' : ''} ${isUrgent ? 'animate-pulse' : ''}`}
                 style={{ color: circleColor }}
               >
                 {timeSec.toString().padStart(2, '0')}:{timeMs.toString().padStart(2, '0')}
@@ -641,7 +1119,11 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
         )}
 
         {/* Instructions */}
-        <div className="bg-black/80 border border-lime-500/50 px-4 py-1 text-lime-400 font-bold tracking-widest shadow-[0_0_20px_rgba(163,230,53,0.2)] backdrop-blur-sm text-center text-[10px] md:text-xs">
+        <div className={`bg-black/80 border px-4 py-1 font-bold tracking-widest backdrop-blur-sm text-center ${
+          isAllocatingHP
+            ? 'border-yellow-400 text-yellow-400 shadow-[0_0_30px_rgba(250,204,21,0.6)] animate-pulse text-sm md:text-base scale-110'
+            : 'border-lime-500/50 text-lime-400 shadow-[0_0_20px_rgba(163,230,53,0.2)] text-[10px] md:text-xs'
+        }`}>
           {message}
         </div>
       </div>

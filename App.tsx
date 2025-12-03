@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GameState, GamePhase, Player, Base } from './types';
 import BattleScreen from './components/BattleScreen';
 import { Navigation } from './components/Navigation';
 import { LobbyPage } from './components/LobbyPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { ProfilePage } from './components/ProfilePage';
+import { usePlayer } from './hooks/usePlayer';
+import { WalletProvider } from './components/WalletProvider';
+import { updateLastPlayedAt } from './lib/supabase';
 
 // Initialize 5 bases with 2 HP each
 const createBases = (): Base[] => [
@@ -61,6 +64,7 @@ const INITIAL_GAME_STATE: GameState = {
   currentPlayer: 'player1',
   currentTurn: 1,
   turnTimeLeft: 10000,
+  betAmount: 0,
   lastTurnResult: null,
   turnHistory: [],
   winner: null,
@@ -68,8 +72,96 @@ const INITIAL_GAME_STATE: GameState = {
 };
 
 export default function App() {
+  const { player: dbPlayer, isLoading } = usePlayer();
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [activeTab, setActiveTab] = useState('lobby');
+  const [matches, setMatches] = useState<any[]>([]);
+
+  // Audio ref for lobby music
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize lobby music on mount
+  useEffect(() => {
+    const audio = new Audio('/sounds/Lobby-music.m4a');
+    audio.loop = true;
+    audio.volume = 0.2;
+    audioRef.current = audio;
+
+    // Cleanup on unmount
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Play/pause music based on game phase
+  useEffect(() => {
+    if (!audioRef.current) return;
+
+    if (gameState.phase === GamePhase.LOBBY) {
+      // In lobby - play music
+      audioRef.current.play().catch(error => {
+        console.log('Autoplay prevented:', error);
+      });
+    } else {
+      // In battle - pause music
+      audioRef.current.pause();
+    }
+  }, [gameState.phase]);
+
+  // Update game state when database player loads
+  useEffect(() => {
+    if (dbPlayer) {
+      setGameState(prev => ({
+        ...prev,
+        player1: {
+          ...prev.player1,
+          id: dbPlayer.id,
+          username: dbPlayer.username,
+          countryFlag: dbPlayer.country_code,
+          isGuest: dbPlayer.is_guest,
+          wins: dbPlayer.total_wins,
+          losses: dbPlayer.total_losses,
+          gamesPlayed: dbPlayer.total_wins + dbPlayer.total_losses,
+          winRate: dbPlayer.total_wins + dbPlayer.total_losses > 0
+            ? (dbPlayer.total_wins / (dbPlayer.total_wins + dbPlayer.total_losses)) * 100
+            : 0,
+          currentStreak: dbPlayer.current_streak,
+          longestStreak: dbPlayer.best_streak,
+        }
+      }));
+
+      // Update last_played_at when player loads (wallet connects)
+      updateLastPlayedAt(dbPlayer.id);
+    }
+  }, [dbPlayer]);
+
+  // Periodic heartbeat to update last_played_at while user is active
+  useEffect(() => {
+    if (!dbPlayer?.id) return;
+
+    // Update immediately on mount
+    updateLastPlayedAt(dbPlayer.id);
+
+    // Update every 60 seconds while app is active
+    const heartbeatInterval = setInterval(() => {
+      updateLastPlayedAt(dbPlayer.id);
+    }, 60000);
+
+    return () => clearInterval(heartbeatInterval);
+  }, [dbPlayer?.id]);
+
+  const handlePlayerUpdate = (updates: Partial<Player>) => {
+    setGameState(prev => ({
+      ...prev,
+      player1: {
+        ...prev.player1,
+        ...updates,
+      }
+    }));
+  };
 
   const handleForfeit = () => {
     // Player clicked nav during match - they forfeit and lose
@@ -108,37 +200,59 @@ export default function App() {
       return (
         <LobbyPage
           player={gameState.player1}
-          onStartBattle={() => setGameState({ ...gameState, phase: GamePhase.PLANNING })}
+          onStartBattle={() => setGameState({ ...gameState, phase: GamePhase.MATCHMAKING })}
+          matches={matches}
+          onMatchesChange={setMatches}
+          isInBattle={gameState.phase !== GamePhase.LOBBY}
         />
       );
     } else if (activeTab === 'leaderboard') {
       return <LeaderboardPage player={gameState.player1} />;
     } else if (activeTab === 'profile') {
-      return <ProfilePage player={gameState.player1} />;
+      return (
+        <ProfilePage
+          player={gameState.player1}
+          onPlayerUpdate={handlePlayerUpdate}
+        />
+      );
     }
   };
 
-  return (
-    <div className="h-screen bg-terminal-bg text-terminal-green font-mono relative flex flex-col overflow-hidden">
-      {/* Background Grid Effect */}
-      <div
-        className="absolute inset-0 opacity-5 pointer-events-none"
-        style={{
-          backgroundImage: 'linear-gradient(#a3e635 1px, transparent 1px), linear-gradient(90deg, #a3e635 1px, transparent 1px)',
-          backgroundSize: '40px 40px'
-        }}
-      />
-
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
-        {renderContent()}
+  // Show loading screen while initializing player
+  if (isLoading) {
+    return (
+      <div className="h-screen bg-terminal-bg text-terminal-green font-mono flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl font-bold mb-4 animate-pulse">INITIALIZING...</div>
+          <div className="text-sm text-lime-700">Connecting to command center</div>
+        </div>
       </div>
+    );
+  }
 
-      <Navigation
-        activeTab={activeTab}
-        onChange={setActiveTab}
-        isInMatch={gameState.phase !== GamePhase.LOBBY}
-        onForfeit={handleForfeit}
-      />
-    </div>
+  return (
+    <WalletProvider>
+      <div className="h-screen bg-terminal-bg text-terminal-green font-mono relative flex flex-col overflow-hidden">
+        {/* Background Grid Effect */}
+        <div
+          className="absolute inset-0 opacity-5 pointer-events-none"
+          style={{
+            backgroundImage: 'linear-gradient(#a3e635 1px, transparent 1px), linear-gradient(90deg, #a3e635 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }}
+        />
+
+        <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
+          {renderContent()}
+        </div>
+
+        <Navigation
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          isInMatch={gameState.phase !== GamePhase.LOBBY}
+          onForfeit={handleForfeit}
+        />
+      </div>
+    </WalletProvider>
   );
 }

@@ -79,6 +79,9 @@ export interface GameState {
   currentTurn: number;
   turnTimeLeft: number; // Milliseconds (10000 for planning phase)
 
+  // Match details
+  betAmount: number; // SOL bet amount (0 for free battles, > 0 for wagered matches)
+
   // Results
   lastTurnResult: TurnResult | null;
   turnHistory: TurnResult[];
