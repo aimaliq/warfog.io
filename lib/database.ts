@@ -38,6 +38,25 @@ export async function getPlayerById(playerId: string): Promise<Player | null> {
   return data;
 }
 
+export async function getPlayerByWallet(walletAddress: string): Promise<Player | null> {
+  const { data, error } = await supabase
+    .from('players')
+    .select('*')
+    .eq('wallet_address', walletAddress)
+    .single();
+
+  if (error) {
+    // Not an error if player doesn't exist yet
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    console.error('Error fetching player by wallet:', error);
+    return null;
+  }
+
+  return data;
+}
+
 export async function updatePlayerStats(
   playerId: string,
   won: boolean

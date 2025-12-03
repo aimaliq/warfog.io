@@ -9,6 +9,8 @@ export interface LeaderboardPlayer {
   losses: number;
   winRate: number;
   wallet: string;
+  gameBalance: number;
+  registeredAt: string;
 }
 
 export const useLeaderboard = () => {
@@ -20,9 +22,12 @@ export const useLeaderboard = () => {
       try {
         const { data, error } = await supabase
           .from('players')
-          .select('username, country_code, total_wins, total_losses, wallet_address')
-          .order('total_wins', { ascending: false })
-          .limit(10);
+          .select('username, country_code, total_wins, total_losses, wallet_address, game_balance, created_at, is_guest')
+          .eq('is_guest', false) // Only registered wallets
+          .not('wallet_address', 'is', null) // Exclude null wallet addresses
+          .order('game_balance', { ascending: false }) // Primary sort: SOL balance
+          .order('created_at', { ascending: true }) // Secondary sort: registration date
+          .limit(100); // Show top 100 instead of just 10
 
         if (error) throw error;
 
@@ -36,11 +41,13 @@ export const useLeaderboard = () => {
             return {
               rank: index + 1,
               username: player.username || 'Anonymous',
-              countryFlag: player.country_code || 'US',
+              countryFlag: player.country_code || 'us',
               wins,
               losses,
               winRate,
               wallet: player.wallet_address || '',
+              gameBalance: player.game_balance || 0,
+              registeredAt: player.created_at || '',
             };
           });
 

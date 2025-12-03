@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GameState, GamePhase, Player, Base } from './types';
 import BattleScreen from './components/BattleScreen';
 import { Navigation } from './components/Navigation';
@@ -64,6 +64,7 @@ const INITIAL_GAME_STATE: GameState = {
   currentPlayer: 'player1',
   currentTurn: 1,
   turnTimeLeft: 10000,
+  betAmount: 0,
   lastTurnResult: null,
   turnHistory: [],
   winner: null,
@@ -75,6 +76,40 @@ export default function App() {
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [activeTab, setActiveTab] = useState('lobby');
   const [matches, setMatches] = useState<any[]>([]);
+
+  // Audio ref for lobby music
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize lobby music on mount
+  useEffect(() => {
+    const audio = new Audio('/sounds/Lobby-music.m4a');
+    audio.loop = true;
+    audio.volume = 0.2;
+    audioRef.current = audio;
+
+    // Cleanup on unmount
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Play/pause music based on game phase
+  useEffect(() => {
+    if (!audioRef.current) return;
+
+    if (gameState.phase === GamePhase.LOBBY) {
+      // In lobby - play music
+      audioRef.current.play().catch(error => {
+        console.log('Autoplay prevented:', error);
+      });
+    } else {
+      // In battle - pause music
+      audioRef.current.pause();
+    }
+  }, [gameState.phase]);
 
   // Update game state when database player loads
   useEffect(() => {
@@ -165,9 +200,10 @@ export default function App() {
       return (
         <LobbyPage
           player={gameState.player1}
-          onStartBattle={() => setGameState({ ...gameState, phase: GamePhase.PLANNING })}
+          onStartBattle={() => setGameState({ ...gameState, phase: GamePhase.MATCHMAKING })}
           matches={matches}
           onMatchesChange={setMatches}
+          isInBattle={gameState.phase !== GamePhase.LOBBY}
         />
       );
     } else if (activeTab === 'leaderboard') {

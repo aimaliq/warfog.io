@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(tasklist:*)",
+      "Bash(dir /b)",
+      "Bash(npx tsx:*)",
+      "Bash(mv:*)",
+      "Bash(node:*)",
+      "Bash(set PORT=3003)",
+      "Bash(timeout /t:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

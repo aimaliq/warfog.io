@@ -192,11 +192,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
     setDepositSuccess(false);
 
     try {
-      // Create connection to Solana Devnet
-      const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+      // Create connection to Solana (reads from environment: mainnet or devnet)
+      const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+      const connection = new Connection(rpcUrl, 'confirmed');
 
-      // Game treasury wallet address
-      const TREASURY_WALLET = new PublicKey('8aumkrXX3sS47zfnWZtFKAKrQnLCjnHXt9cduRcScshd');
+      // Game treasury wallet address from environment variable
+      const treasuryAddress = import.meta.env.VITE_TREASURY_WALLET || '8aumkrXX3sS47zfnWZtFKAKrQnLCjnHXt9cduRcScshd';
+      const TREASURY_WALLET = new PublicKey(treasuryAddress);
 
       // Create transfer instruction
       const transaction = new Transaction().add(
@@ -270,34 +272,42 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
     setWithdrawSuccess(false);
 
     try {
-      // NOTE: In a real application, this would trigger a backend service
-      // to send SOL from the treasury wallet to the user's wallet
-      // For now, we just update the database to reflect the withdrawal
+      // Call backend API to process withdrawal
+      // The backend holds the treasury wallet private key and will send SOL to the user
+      const response = await fetch('http://localhost:3003/api/withdraw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          playerWallet: publicKey.toBase58(),
+          amount: amount,
+          playerId: player.id,
+        }),
+      });
 
-      // Update balance in database
-      if (player.id && player.id.length > 20) {
-        const { error } = await supabase
-          .from('players')
-          .update({
-            game_balance: Math.max(0, gameBalance - amount),
-          })
-          .eq('id', player.id);
+      const data = await response.json();
 
-        if (error) throw error;
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to process withdrawal');
       }
+
+      console.log('✅ Withdrawal successful!', data);
+      console.log('🔗 View on Solana Explorer:', data.explorerUrl);
 
       // Update local balance
       setGameBalance(prev => Math.max(0, prev - amount));
       setWithdrawAmount('');
       setWithdrawSuccess(true);
 
+      // Show success message with transaction link
       setTimeout(() => {
         setIsWithdrawOpen(false);
         setWithdrawSuccess(false);
-      }, 2000);
+      }, 3000);
 
     } catch (error: any) {
-      console.error('Withdraw error:', error);
+      console.error('❌ Withdraw error:', error);
       setWithdrawError(error.message || 'Failed to withdraw. Please try again.');
     } finally {
       setIsWithdrawing(false);

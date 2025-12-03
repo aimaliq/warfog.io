@@ -5,12 +5,15 @@ import { WalletButton } from './WalletButton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useOnlinePlayers } from '../hooks/useOnlinePlayers';
 import { supabase } from '../lib/supabase';
+import { useRecentWins } from '../hooks/useRecentWins';
+import { WinsTicker } from './WinsTicker';
 
 interface LobbyPageProps {
   player: Player;
   onStartBattle: () => void;
   matches?: any[];
   onMatchesChange?: (matches: any[]) => void;
+  isInBattle?: boolean;
 }
 
 interface Match {
@@ -25,10 +28,12 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   player,
   onStartBattle,
   matches: propMatches = [],
-  onMatchesChange
+  onMatchesChange,
+  isInBattle = false
 }) => {
   const { connected, publicKey } = useWallet();
   const { onlineCount, isLoading } = useOnlinePlayers();
+  const { wins } = useRecentWins();
   const [isHowToPlayOpen, setIsHowToPlayOpen] = useState(false);
   const [selectedBet, setSelectedBet] = useState<number>(0.1);
   const [gameBalance, setGameBalance] = useState<number>(0);
@@ -140,6 +145,103 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           </div>
         </div>
 
+        {/* How to Play Section */}
+        <div className="bg-black/60 border-2 border-lime-900 mb-6">
+          <button
+            onClick={() => setIsHowToPlayOpen(!isHowToPlayOpen)}
+            className="w-full px-4 py-3 flex items-center justify-center gap-2 hover:bg-lime-900/10 transition-all relative"
+          >
+            <span className="material-icons-outlined text-yellow-500 text-xl">help_outline</span>
+            <h3 className="text-yellow-500 font-bold text-lg tracking-widest">HOW TO PLAY</h3>
+            <span className="material-icons-outlined text-yellow-500 text-2xl absolute right-12">
+              {isHowToPlayOpen ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+
+          {isHowToPlayOpen && (
+            <div className="px-4 pb-4 pt-2 border-t border-lime-900/30 space-y-4 animate-fadeIn">
+              {/* Step 1 */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
+                  <span className="text-yellow-500 font-black text-sm">1</span>
+                </div>
+                <div className="flex-1">
+                  <div className="text-lime-500 font-bold text-sm mb-1">DEFEND YOUR SILOS</div>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Select 2 silos to protect from enemy missiles. Hit silos lose 1 HP (2 HP each).
+                  </p>
+                  <div>
+                    <img 
+                      src="/src\defend GIF.gif" 
+                      alt="Defend mechanics" 
+                      className="w-full rounded-md"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
+                  <span className="text-yellow-500 font-black text-sm">2</span>
+                </div>
+                <div className="flex-1">
+                  <div className="text-lime-500 font-bold text-sm mb-1">ATTACK THE ENEMY</div>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Select 3 enemy silos to attack. Each destroyed silo grants you +1 HP to allocate on your defenses.
+                  </p>
+                  <div>
+                    <img 
+                      src="/src\attack GIF.gif" 
+                      alt="Attack mechanics" 
+                      className="w-full rounded-md"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
+                  <span className="text-yellow-500 font-black text-sm">3</span>
+                </div>
+                <div className="flex-1">
+                  <div className="text-lime-500 font-bold text-sm mb-1">DESTROY 3 TO WIN</div>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    First player to destroy 3 enemy silos wins the match.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
+                  <span className="text-yellow-500 font-black text-sm">4</span>
+                </div>
+                <div className="flex-1">
+                  <div className="text-lime-500 font-bold text-sm mb-1">10-SECOND TURNS</div>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Fast decisions. No time for caution.
+                  </p>
+                </div>
+              </div>
+
+              {/* Fog of War Note */}
+              <div className="mt-4 pt-4 bg-yellow-900/25 border border-yellow-900/100 p-3">
+                <div className="flex items-start gap-2">
+                  <div>
+                    <div className="text-yellow-500 font-bold text-center text-xl mb-1">FOG OF WAR</div>
+                    <p className="text-sm text-lime-500/90 text-center leading-relaxed">
+                      In this game you can't see the enemy HP or which nuclear silos they are defending. You must predict, adapt, and outthink your opponent!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
+
         {/* Join Battle Button */}
         <div className="btn-snake-wrapper">
           <svg xmlns="http://www.w3.org/2000/svg">
@@ -162,103 +264,23 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           </svg>
           <button
             onClick={onStartBattle}
-            className="w-full py-6 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-2xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10"
+            disabled={isInBattle}
+            className="w-full py-6 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-2xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
           >
             JOIN FREE BATTLE
           </button>
         </div>
 
-        <div className="text-center mt-3 text-xs text-gray-600">
-          Press to enter matchmaking queue
+        <div className="text-center mt-3 text-xs text-gray-600 mb-6">
         </div>
 
-        {/* How to Play Section */}
-        <div className="mt-8 bg-black/60 border-2 border-lime-900 mb-6">
-          <button
-            onClick={() => setIsHowToPlayOpen(!isHowToPlayOpen)}
-            className="w-full px-4 py-3 flex items-center justify-center gap-2 hover:bg-lime-900/10 transition-all relative"
-          >
-            <span className="material-icons-outlined text-yellow-500 text-xl">help_outline</span>
-            <h3 className="text-yellow-500 font-bold text-sm tracking-widest">HOW TO PLAY</h3>
-            <span className="material-icons-outlined text-yellow-500 text-2xl absolute right-12">
-              {isHowToPlayOpen ? 'expand_less' : 'expand_more'}
-            </span>
-          </button>
-
-          {isHowToPlayOpen && (
-            <div className="px-4 pb-4 pt-2 border-t border-lime-900/30 space-y-4 animate-fadeIn">
-              {/* Step 1 */}
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">1</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">DEFEND YOUR SILOS</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Select 2 of your 5 nuclear silos to shield (2 HP each) from enemy missiles. Undefended silos lose 1 HP when struck.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">2</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">ATTACK THE ENEMY</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Select 3 enemy silos to strike. Each destroyed silo grants +1 HP to allocate on your defenses.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">3</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">DESTROY 3 TO WIN</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    First to destroy 3 enemy silos wins.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">4</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">10-SECOND TURNS</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Fast decisions under pressure. Hesitate and you forfeit your turn.
-                  </p>
-                </div>
-              </div>
-
-              {/* Fog of War Note */}
-              <div className="mt-4 pt-4 border-t border-lime-900/30 bg-yellow-900/10 border border-yellow-900/30 p-3">
-                <div className="flex items-start gap-2">
-                  <div>
-                    <div className="text-yellow-500 font-bold text-md mb-1">FOG OF WAR</div>
-                    <p className="text-[12px] text-lime-600/80 leading-relaxed">
-                      Describes the uncertainty, confusion, and lack of clarity in military conflicts, where information is often incomplete, misleading, or unavailable. In this game you can't see the enemy HP or which nuclear silos they are defending. Predict, adapt, and outthink your opponent!
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
-        </div>
+        {/* Recent Wins Ticker */}
+        <WinsTicker wins={wins} />
 
         {/* Live Operations Table */}
         <div className="bg-black/60 border-2 border-lime-900">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10 flex justify-between items-center">
-            <h2 className="text-lime-500 font-bold text-sm tracking-widest">SOL OPERATIONS</h2>
+            <h2 className="text-lime-500 font-bold text-md tracking-widest">SOL OPERATIONS</h2>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
@@ -272,7 +294,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="space-y-3">
               {/* Balance Display */}
               {connected && (
-                <div className="text-center text-sm">
+                <div className="text-left text-md">
                   <span className="text-gray-500">Game Balance: </span>
                   <span className="text-lime-500 font-bold font-mono">
                     {isLoadingBalance ? '...' : `${gameBalance.toFixed(2)} SOL`}
@@ -282,10 +304,10 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <span className="text-lime-500 font-bold text-sm sm:block hidden">SOL</span>
-                <div className="flex gap-2 flex-1">
+                <div className="flex gap-2 flex-1 mb-2">
                   <button
                     onClick={() => setSelectedBet(0.1)}
-                    disabled={!connected}
+                    disabled={!connected || isInBattle}
                     className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       selectedBet === 0.1
                         ? 'bg-lime-900/40 border-lime-500 text-lime-400'
@@ -296,7 +318,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   </button>
                   <button
                     onClick={() => setSelectedBet(0.5)}
-                    disabled={!connected}
+                    disabled={!connected || isInBattle}
                     className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       selectedBet === 0.5
                         ? 'bg-lime-900/40 border-lime-500 text-lime-400'
@@ -307,7 +329,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   </button>
                   <button
                     onClick={() => setSelectedBet(1)}
-                    disabled={!connected}
+                    disabled={!connected || isInBattle}
                     className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       selectedBet === 1
                         ? 'bg-lime-900/40 border-lime-500 text-lime-400'
@@ -319,7 +341,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </div>
                 <button
                   onClick={handleCreateMatch}
-                  disabled={!connected || gameBalance < selectedBet}
+                  disabled={!connected || gameBalance < selectedBet || isInBattle}
                   className="w-full sm:w-auto px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all text-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
                 >
                   CREATE SOL MATCH
@@ -371,7 +393,8 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                       </div>
                       <button
                         onClick={onStartBattle}
-                        className="px-4 py-2 bg-lime-900/40 border border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all text-xs whitespace-nowrap"
+                        disabled={isInBattle}
+                        className="px-4 py-2 bg-lime-900/40 border border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all text-xs whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
                       >
                         JOIN
                       </button>
