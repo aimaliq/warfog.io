@@ -16,6 +16,10 @@ export function usePlayer() {
   async function initializePlayer() {
     try {
       setIsLoading(true);
+      setError(null);
+
+      // Clear previous player state when wallet changes
+      setDbPlayer(null);
 
       // PRIORITY 1: Check if wallet is connected and has existing player
       if (connected && publicKey) {
