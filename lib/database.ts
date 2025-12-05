@@ -57,6 +57,25 @@ export async function getPlayerByWallet(walletAddress: string): Promise<Player |
   return data;
 }
 
+export async function updatePlayerWallet(
+  playerId: string,
+  walletAddress: string
+): Promise<Player | null> {
+  const { data, error } = await supabase
+    .from('players')
+    .update({ wallet_address: walletAddress })
+    .eq('id', playerId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating player wallet:', error);
+    return null;
+  }
+
+  return data;
+}
+
 export async function updatePlayerStats(
   playerId: string,
   won: boolean

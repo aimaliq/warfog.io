@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { createGuestPlayer, getPlayerById, getPlayerByWallet } from '../lib/database';
+import { createGuestPlayer, getPlayerById, getPlayerByWallet, updatePlayerWallet } from '../lib/database';
 import { Player as DBPlayer } from '../lib/supabase';
 
 export function usePlayer() {
@@ -28,9 +28,41 @@ export function usePlayer() {
           setIsLoading(false);
           return;
         }
+
+        // Wallet connected but no player found by wallet
+        // Check if there's a player in localStorage that needs wallet linking
+        const savedPlayerId = localStorage.getItem('warfog_player_id');
+        if (savedPlayerId) {
+          const existingPlayer = await getPlayerById(savedPlayerId);
+          if (existingPlayer) {
+            // Link this wallet to existing player
+            const updatedPlayer = await updatePlayerWallet(savedPlayerId, walletAddress);
+            if (updatedPlayer) {
+              setDbPlayer(updatedPlayer);
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
+
+        // No existing player - create new one with wallet
+        const newPlayer = await createGuestPlayer();
+        if (newPlayer) {
+          // Immediately link wallet to new player
+          const updatedPlayer = await updatePlayerWallet(newPlayer.id, walletAddress);
+          if (updatedPlayer) {
+            setDbPlayer(updatedPlayer);
+            localStorage.setItem('warfog_player_id', updatedPlayer.id);
+          } else {
+            setDbPlayer(newPlayer);
+            localStorage.setItem('warfog_player_id', newPlayer.id);
+          }
+          setIsLoading(false);
+          return;
+        }
       }
 
-      // PRIORITY 2: Check if player ID exists in localStorage
+      // PRIORITY 2: No wallet connected - check localStorage
       const savedPlayerId = localStorage.getItem('warfog_player_id');
 
       if (savedPlayerId) {
