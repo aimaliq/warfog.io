@@ -274,7 +274,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
     try {
       // Call backend API to process withdrawal
       // The backend holds the treasury wallet private key and will send SOL to the user
-      const response = await fetch('http://localhost:3003/api/withdraw', {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://warfogio-production.up.railway.app';
+      const response = await fetch(`${backendUrl}/api/withdraw`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

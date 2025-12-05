@@ -101,15 +101,28 @@ export default function App() {
     if (!audioRef.current) return;
 
     if (gameState.phase === GamePhase.LOBBY) {
-      // In lobby - play music
-      audioRef.current.play().catch(error => {
-        console.log('Autoplay prevented:', error);
-      });
+      // In lobby - play music (attempt with user gesture context)
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.log('Autoplay prevented - will retry after user interaction:', error);
+        });
+      }
     } else {
       // In battle - pause music
       audioRef.current.pause();
     }
   }, [gameState.phase]);
+
+  // Retry audio playback when player connects (user interaction)
+  useEffect(() => {
+    if (dbPlayer && audioRef.current && gameState.phase === GamePhase.LOBBY) {
+      // User has interacted by connecting wallet - try to play audio
+      audioRef.current.play().catch(() => {
+        // Still blocked, user needs to click somewhere
+      });
+    }
+  }, [dbPlayer, gameState.phase]);
 
   // Update game state when database player loads
   useEffect(() => {
