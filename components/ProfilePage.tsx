@@ -57,6 +57,18 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
 
+  // Sync local state with player prop changes (for immediate UI updates on wallet connect/disconnect)
+  useEffect(() => {
+    setCurrentUsername(player.username);
+    setCurrentCountry(player.countryFlag);
+
+    // Only update edit fields if edit modal is closed (don't overwrite user's typing)
+    if (!isEditOpen) {
+      setEditUsername(player.username);
+      setEditCountry(player.countryFlag);
+    }
+  }, [player.username, player.countryFlag, isEditOpen]);
+
   // Fetch game balance on mount and when player changes
   useEffect(() => {
     const fetchGameBalance = async () => {

@@ -6,7 +6,6 @@ import { LobbyPage } from './components/LobbyPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { ProfilePage } from './components/ProfilePage';
 import { usePlayer } from './hooks/usePlayer';
-import { WalletProvider } from './components/WalletProvider';
 import { updateLastPlayedAt } from './lib/supabase';
 
 // Initialize 5 bases with 2 HP each
@@ -124,7 +123,7 @@ export default function App() {
     }
   }, [dbPlayer, gameState.phase]);
 
-  // Update game state when database player loads
+  // Update game state when database player loads or clears
   useEffect(() => {
     if (dbPlayer) {
       setGameState(prev => ({
@@ -148,6 +147,12 @@ export default function App() {
 
       // Update last_played_at when player loads (wallet connects)
       updateLastPlayedAt(dbPlayer.id);
+    } else {
+      // Player disconnected - reset to initial state
+      setGameState(prev => ({
+        ...prev,
+        player1: INITIAL_PLAYER,
+      }));
     }
   }, [dbPlayer]);
 
@@ -244,28 +249,26 @@ export default function App() {
   }
 
   return (
-    <WalletProvider>
-      <div className="h-screen bg-terminal-bg text-terminal-green font-mono relative flex flex-col overflow-hidden">
-        {/* Background Grid Effect */}
-        <div
-          className="absolute inset-0 opacity-5 pointer-events-none"
-          style={{
-            backgroundImage: 'linear-gradient(#a3e635 1px, transparent 1px), linear-gradient(90deg, #a3e635 1px, transparent 1px)',
-            backgroundSize: '40px 40px'
-          }}
-        />
+    <div className="h-screen bg-terminal-bg text-terminal-green font-mono relative flex flex-col overflow-hidden">
+      {/* Background Grid Effect */}
+      <div
+        className="absolute inset-0 opacity-5 pointer-events-none"
+        style={{
+          backgroundImage: 'linear-gradient(#a3e635 1px, transparent 1px), linear-gradient(90deg, #a3e635 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }}
+      />
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
-          {renderContent()}
-        </div>
-
-        <Navigation
-          activeTab={activeTab}
-          onChange={setActiveTab}
-          isInMatch={gameState.phase !== GamePhase.LOBBY}
-          onForfeit={handleForfeit}
-        />
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
+        {renderContent()}
       </div>
-    </WalletProvider>
+
+      <Navigation
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        isInMatch={gameState.phase !== GamePhase.LOBBY}
+        onForfeit={handleForfeit}
+      />
+    </div>
   );
 }
