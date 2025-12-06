@@ -89,39 +89,67 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
       return;
     }
 
-    const newMatch: Match = {
-      id: Math.random().toString(36).substr(2, 9),
-      betAmount: selectedBet,
-      creator: publicKey.toBase58().slice(0, 4) + '...' + publicKey.toBase58().slice(-4),
-      createdAt: new Date(),
-      flag: player.countryFlag,
-    };
+    try {
+      // Save match to database and deduct bet amount
+      const { data: matchData, error: matchError } = await supabase
+        .from('matches')
+        .insert({
+          player1_id: player.id,
+          status: 'waiting',
+          wager_amount: selectedBet,
+        })
+        .select()
+        .single();
 
-    // TODO: Save to database via Supabase and deduct bet amount
-    // const { data, error } = await supabase
-    //   .from('matches')
-    //   .insert({
-    //     bet_amount: selectedBet,
-    //     creator_wallet: publicKey.toBase58(),
-    //     creator_flag: player.countryFlag,
-    //     status: 'waiting'
-    //   });
-    //
-    // if (!error) {
-    //   // Deduct bet amount from balance
-    //   await supabase
-    //     .from('players')
-    //     .update({ game_balance: gameBalance - selectedBet })
-    //     .eq('id', player.id);
-    //   setGameBalance(prev => prev - selectedBet);
-    // }
+      if (matchError) throw matchError;
 
-    // Update matches through parent component
-    if (onMatchesChange) {
-      onMatchesChange([...matches, newMatch]);
+      // Deduct bet amount from player's game balance
+      const { error: balanceError } = await supabase
+        .from('players')
+        .update({ game_balance: gameBalance - selectedBet })
+        .eq('id', player.id);
+
+      if (balanceError) {
+        // Rollback: Delete the match if balance update failed
+        await supabase.from('matches').delete().eq('id', matchData.id);
+        throw balanceError;
+      }
+
+      // Update local balance
+      setGameBalance(prev => prev - selectedBet);
+
+      // Add to matchmaking queue
+      const { error: queueError } = await supabase
+        .from('matchmaking_queue')
+        .insert({
+          player_id: player.id,
+          wager_amount: selectedBet,
+        });
+
+      if (queueError) {
+        console.error('Error joining matchmaking queue:', queueError);
+        // Don't fail the whole operation if queue fails
+      }
+
+      // Create local match object for display
+      const newMatch: Match = {
+        id: matchData.id,
+        betAmount: selectedBet,
+        creator: publicKey.toBase58().slice(0, 4) + '...' + publicKey.toBase58().slice(-4),
+        createdAt: new Date(matchData.created_at),
+        flag: player.countryFlag,
+      };
+
+      // Update matches through parent component
+      if (onMatchesChange) {
+        onMatchesChange([...matches, newMatch]);
+      }
+
+      setBalanceError(null);
+    } catch (error: any) {
+      console.error('Error creating match:', error);
+      setBalanceError(error.message || 'Failed to create match. Please try again.');
     }
-
-    setBalanceError(null);
   };
 
   const getTimeAgo = (date: Date) => {
