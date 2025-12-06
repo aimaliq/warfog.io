@@ -84,8 +84,13 @@ export default function App() {
   useEffect(() => {
     const audio = new Audio('/sounds/Lobby-music.m4a');
     audio.loop = true;
-    audio.volume = 0.2;
+    audio.volume = 0.1;
     audioRef.current = audio;
+
+    // Try to play immediately (may be blocked by browser autoplay policy)
+    audio.play().catch(error => {
+      console.log('Autoplay blocked - music will start after user interaction:', error);
+    });
 
     // Cleanup on unmount
     return () => {
@@ -96,33 +101,30 @@ export default function App() {
     };
   }, []);
 
-  // Play/pause music based on game phase
-  useEffect(() => {
-    if (!audioRef.current) return;
-
-    if (gameState.phase === GamePhase.LOBBY) {
-      // In lobby - play music (attempt with user gesture context)
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.log('Autoplay prevented - will retry after user interaction:', error);
-        });
-      }
-    } else {
-      // In battle - pause music
-      audioRef.current.pause();
-    }
-  }, [gameState.phase]);
-
   // Retry audio playback when player connects (user interaction)
   useEffect(() => {
-    if (dbPlayer && audioRef.current && gameState.phase === GamePhase.LOBBY) {
+    if (dbPlayer && audioRef.current) {
       // User has interacted by connecting wallet - try to play audio
       audioRef.current.play().catch(() => {
         // Still blocked, user needs to click somewhere
       });
     }
-  }, [dbPlayer, gameState.phase]);
+  }, [dbPlayer]);
+
+  // Pause music during battles, resume in lobby
+  useEffect(() => {
+    if (!audioRef.current) return;
+
+    if (gameState.phase === GamePhase.LOBBY) {
+      // In lobby - play music
+      audioRef.current.play().catch(() => {
+        // Autoplay blocked or already playing
+      });
+    } else {
+      // In battle - pause music
+      audioRef.current.pause();
+    }
+  }, [gameState.phase]);
 
   // Update game state when database player loads or clears
   useEffect(() => {

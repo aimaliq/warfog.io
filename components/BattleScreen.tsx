@@ -437,11 +437,11 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
       setLastSecond(currentSec);
       setIsPopping(true);
 
-      // Play beep sound - rapid beeping on last second
-      if (currentSec === 0) {
-        // Last second (1→0): 5 rapid beeps (200ms apart = 5 beeps in 1 second)
-        for (let i = 0; i < 5; i++) {
-          setTimeout(() => playBeep(), i * 200);
+      // Play beep sound - rapid beeping from 2.00 to 0.00
+      if (currentSec <= 1) {
+        // From 2→1 and 1→0: continuous rapid beeping (6 beeps per transition for smoothness)
+        for (let i = 0; i < 6; i++) {
+          setTimeout(() => playBeep(), i * 180); // 180ms apart = ~5.5 beeps per second, 12 total
         }
       } else {
         // Normal beep for other seconds

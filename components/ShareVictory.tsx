@@ -86,7 +86,7 @@ warfog.io`;
       {/* Twitter Share Button */}
       <button
         onClick={handleTwitterShare}
-        className="flex-1 py-3 px-4 bg-lime-900/20 border-2 border-lime-500 text-lime-400 font-bold font-mono text-xs tracking-wider hover:bg-lime-500 hover:text-black transition-all shadow-[0_0_15px_rgba(163,230,53,0.3)] hover:shadow-[0_0_25px_rgba(163,230,53,0.6)]"
+        className="flex-1 py-3 px-4 bg-yellow-900/20 border-2 border-yellow-400 text-yellow-400 font-bold font-mono text-xs tracking-wider hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse"
       >
         SHARE ON X
       </button>
@@ -99,7 +99,7 @@ warfog.io`;
             ? 'bg-lime-500 border-2 border-lime-400 text-black'
             : copyError
             ? 'bg-red-900/20 border-2 border-red-500 text-red-400'
-            : 'bg-lime-900/20 border-2 border-lime-500 text-lime-400 hover:bg-lime-500 hover:text-black shadow-[0_0_15px_rgba(163,230,53,0.3)] hover:shadow-[0_0_25px_rgba(163,230,53,0.6)]'
+            : 'bg-yellow-900/20 border-2 border-yellow-400 text-yellow-400 hover:bg-yellow-500 hover:text-black shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse'
         }`}
       >
         {showCopySuccess ? '✓ COPIED!' : copyError ? '✗ FAILED' : 'COPY LINK'}
