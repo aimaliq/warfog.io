@@ -5,6 +5,7 @@ import { Navigation } from './components/Navigation';
 import { LobbyPage } from './components/LobbyPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { ProfilePage } from './components/ProfilePage';
+import { TermsPage } from './components/TermsPage';
 import { usePlayer } from './hooks/usePlayer';
 import { updateLastPlayedAt } from './lib/supabase';
 
@@ -231,8 +232,11 @@ export default function App() {
         <ProfilePage
           player={gameState.player1}
           onPlayerUpdate={handlePlayerUpdate}
+          onNavigateToTerms={() => setActiveTab('terms')}
         />
       );
+    } else if (activeTab === 'terms') {
+      return <TermsPage />;
     }
   };
 

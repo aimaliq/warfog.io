@@ -144,6 +144,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <WalletButton />
           </div>
         </div>
+        
+        {/* Recent Wins Ticker */}
+        <WinsTicker wins={wins} />
 
         {/* How to Play Section */}
         <div className="bg-black/60 border-2 border-lime-900 mb-6">
@@ -160,6 +163,17 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
           {isHowToPlayOpen && (
             <div className="px-4 pb-4 pt-2 border-t border-lime-900/30 space-y-4 animate-fadeIn">
+              {/* Fog of War Note */}
+              <div className="mb-4 pt-4 bg-yellow-900/25 border border-yellow-900/100 p-3">
+                <div className="flex items-start gap-2">
+                  <div>
+                    <p className="text-xs text-lime-500/90 text-center leading-relaxed">
+                      In this game you can't see the enemy HP or which nuclear silos they are defending. You must predict, adapt, and outthink your opponent! This concept is referred to as FOG OF WAR.
+                    </p>
+                  </div>
+                </div>
+              </div>
+                            
               {/* Step 1 */}
               <div className="flex gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
@@ -225,19 +239,6 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   </p>
                 </div>
               </div>
-
-              {/* Fog of War Note */}
-              <div className="mt-4 pt-4 bg-yellow-900/25 border border-yellow-900/100 p-3">
-                <div className="flex items-start gap-2">
-                  <div>
-                    <div className="text-yellow-500 font-bold text-center text-xl mb-1">FOG OF WAR</div>
-                    <p className="text-sm text-lime-500/90 text-center leading-relaxed">
-                      In this game you can't see the enemy HP or which nuclear silos they are defending. You must predict, adapt, and outthink your opponent!
-                    </p>
-                  </div>
-                </div>
-              </div>
-
             </div>
           )}
         </div>
@@ -273,9 +274,6 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
         <div className="text-center mt-3 text-xs text-gray-600 mb-6">
         </div>
-
-        {/* Recent Wins Ticker */}
-        <WinsTicker wins={wins} />
 
         {/* Live Operations Table */}
         <div className="bg-black/60 border-2 border-lime-900">

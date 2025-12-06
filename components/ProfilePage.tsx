@@ -11,6 +11,7 @@ import { useGlobalRank } from '../hooks/useGlobalRank';
 interface ProfilePageProps {
   player: Player;
   onPlayerUpdate?: (updates: Partial<Player>) => void;
+  onNavigateToTerms?: () => void;
 }
 
 // Common country codes
@@ -20,7 +21,7 @@ const COUNTRY_CODES = [
   'mx', 'ar', 'za', 'eg', 'ng', 'ke', 'il', 'tr', 'sa', 'ae'
 ];
 
-export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate }) => {
+export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate, onNavigateToTerms }) => {
   const { publicKey, connected, sendTransaction } = useWallet();
   const { matches, isLoading: isLoadingMatches } = useMatchHistory(
     player.id,
@@ -645,6 +646,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
               </div>
             )}
           </div>
+        </div>
+
+        {/* Terms of Service Link */}
+        <div className="mt-6 text-center">
+          <button
+            onClick={onNavigateToTerms}
+            className="text-lime-500 hover:text-lime-400 transition-colors text-sm"
+          >
+            Terms of Service
+          </button>
         </div>
       </div>
     </div>
