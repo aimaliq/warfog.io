@@ -76,6 +76,7 @@ export default function App() {
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [activeTab, setActiveTab] = useState('lobby');
   const [matches, setMatches] = useState<any[]>([]);
+  const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
 
   // Audio ref for lobby music
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -213,7 +214,7 @@ export default function App() {
   const renderContent = () => {
     // During gameplay, always show battle screen regardless of tab
     if (gameState.phase !== GamePhase.LOBBY) {
-      return <BattleScreen gameState={gameState} setGameState={setGameState} />;
+      return <BattleScreen gameState={gameState} setGameState={setGameState} matchId={currentMatchId} />;
     }
 
     // In lobby, show content based on active tab
@@ -221,7 +222,10 @@ export default function App() {
       return (
         <LobbyPage
           player={gameState.player1}
-          onStartBattle={() => setGameState({ ...gameState, phase: GamePhase.MATCHMAKING })}
+          onStartBattle={(matchId?: string) => {
+            setCurrentMatchId(matchId || null);
+            setGameState({ ...gameState, phase: GamePhase.MATCHMAKING });
+          }}
           matches={matches}
           onMatchesChange={setMatches}
           isInBattle={gameState.phase !== GamePhase.LOBBY}

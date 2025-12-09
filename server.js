@@ -189,6 +189,20 @@ app.post('/api/withdraw', async (req, res) => {
       // Transaction already sent, so we return success but log the error
     }
 
+    // Log transaction to history
+    const { error: txError } = await supabase
+      .from('transactions')
+      .insert({
+        player_id: playerId,
+        type: 'withdrawal',
+        amount: withdrawAmount,
+        signature: signature
+      });
+
+    if (txError) {
+      console.error('Warning: Failed to log transaction history:', txError);
+    }
+
     // Generate explorer URL based on network
     const clusterParam = SOLANA_NETWORK === 'mainnet-beta' ? '' : `?cluster=${SOLANA_NETWORK}`;
 
@@ -465,6 +479,586 @@ app.post('/api/fees/collect', async (req, res) => {
   }
 });
 
+// ==============================================
+// MATCHMAKING ENDPOINTS
+// ==============================================
+
+// Join matchmaking queue
+app.post('/api/matchmaking/join', async (req, res) => {
+  try {
+    const { playerId, wagerAmount } = req.body;
+
+    // Validate input
+    if (!playerId || wagerAmount === undefined) {
+      return res.status(400).json({ error: 'Missing playerId or wagerAmount' });
+    }
+
+    // Validate player balance
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .select('game_balance')
+      .eq('id', playerId)
+      .single();
+
+    if (playerError || !player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+
+    if (player.game_balance < wagerAmount) {
+      return res.status(400).json({
+        error: `Insufficient balance. You have ${player.game_balance} SOL but need ${wagerAmount} SOL`
+      });
+    }
+
+    // Deduct balance atomically
+    const { error: balanceError } = await supabase
+      .from('players')
+      .update({ game_balance: player.game_balance - wagerAmount })
+      .eq('id', playerId);
+
+    if (balanceError) {
+      console.error('Error deducting balance:', balanceError);
+      throw balanceError;
+    }
+
+    // Add player to queue
+    const { error: queueError } = await supabase
+      .from('matchmaking_queue')
+      .insert({ player_id: playerId, wager_amount: wagerAmount });
+
+    if (queueError) {
+      // Rollback balance on queue error
+      await supabase
+        .from('players')
+        .update({ game_balance: player.game_balance })
+        .eq('id', playerId);
+      console.error('Error joining queue:', queueError);
+      throw queueError;
+    }
+
+    console.log(`🎮 Player ${playerId} joined queue for ${wagerAmount} SOL`);
+
+    // Attempt instant match using atomic database function
+    const { data: matchResult, error: matchError } = await supabase
+      .rpc('find_and_create_match', {
+        p_player_id: playerId,
+        p_wager_amount: wagerAmount
+      });
+
+    if (matchError) {
+      console.error('Error finding match:', matchError);
+      // Player stays in queue even if match finding fails
+      return res.json({
+        status: 'queued',
+        wagerAmount: wagerAmount
+      });
+    }
+
+    // Check if match was found
+    if (matchResult && matchResult.length > 0 && matchResult[0].match_id) {
+      const match = matchResult[0];
+      console.log(`✅ Instant match found! Match ID: ${match.match_id}`);
+
+      return res.json({
+        status: 'matched',
+        matchId: match.match_id,
+        opponentId: match.opponent_id
+      });
+    } else {
+      // No opponent found, player stays in queue
+      console.log(`⏳ No opponent found. Player ${playerId} waiting in queue...`);
+      return res.json({
+        status: 'queued',
+        wagerAmount: wagerAmount
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Matchmaking join error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to join matchmaking'
+    });
+  }
+});
+
+// Leave matchmaking queue
+app.post('/api/matchmaking/leave', async (req, res) => {
+  try {
+    const { playerId } = req.body;
+
+    if (!playerId) {
+      return res.status(400).json({ error: 'Missing playerId' });
+    }
+
+    // Get queue entry to find wager amount for refund
+    const { data: queueEntry, error: queueError } = await supabase
+      .from('matchmaking_queue')
+      .select('wager_amount')
+      .eq('player_id', playerId)
+      .single();
+
+    if (queueError || !queueEntry) {
+      return res.status(404).json({ error: 'Player not in queue' });
+    }
+
+    // Remove from queue
+    const { error: deleteError } = await supabase
+      .from('matchmaking_queue')
+      .delete()
+      .eq('player_id', playerId);
+
+    if (deleteError) {
+      console.error('Error removing from queue:', deleteError);
+      throw deleteError;
+    }
+
+    // Refund balance
+    const { data: player, error: playerError } = await supabase
+      .from('players')
+      .select('game_balance')
+      .eq('id', playerId)
+      .single();
+
+    if (playerError || !player) {
+      console.error('Warning: Player not found for refund:', playerError);
+      return res.json({
+        success: true,
+        refundedAmount: queueEntry.wager_amount,
+        warning: 'Removed from queue but could not refund balance'
+      });
+    }
+
+    const { error: refundError } = await supabase
+      .from('players')
+      .update({ game_balance: player.game_balance + queueEntry.wager_amount })
+      .eq('id', playerId);
+
+    if (refundError) {
+      console.error('Error refunding balance:', refundError);
+    }
+
+    console.log(`❌ Player ${playerId} left queue. Refunded ${queueEntry.wager_amount} SOL`);
+
+    res.json({
+      success: true,
+      refundedAmount: queueEntry.wager_amount
+    });
+
+  } catch (error) {
+    console.error('❌ Leave queue error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to leave queue'
+    });
+  }
+});
+
+// ==============================================
+// STALE QUEUE CLEANUP (Background Job)
+// ==============================================
+// Runs every 5 minutes to clean up abandoned queue entries
+// Automatically refunds players who have been waiting too long
+
+setInterval(async () => {
+  try {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    // Find stale queue entries (older than 5 minutes)
+    const { data: staleEntries, error: queryError } = await supabase
+      .from('matchmaking_queue')
+      .select('player_id, wager_amount')
+      .lt('joined_at', fiveMinutesAgo);
+
+    if (queryError) {
+      console.error('Error querying stale entries:', queryError);
+      return;
+    }
+
+    if (!staleEntries || staleEntries.length === 0) {
+      return; // No stale entries to clean
+    }
+
+    console.log(`🧹 Cleaning ${staleEntries.length} stale queue entries...`);
+
+    for (const entry of staleEntries) {
+      try {
+        // Get player's current balance
+        const { data: player } = await supabase
+          .from('players')
+          .select('game_balance')
+          .eq('id', entry.player_id)
+          .single();
+
+        if (player) {
+          // Refund balance
+          await supabase
+            .from('players')
+            .update({ game_balance: player.game_balance + entry.wager_amount })
+            .eq('id', entry.player_id);
+
+          console.log(`   ↩️  Refunded ${entry.wager_amount} SOL to player ${entry.player_id}`);
+        }
+
+        // Remove from queue
+        await supabase
+          .from('matchmaking_queue')
+          .delete()
+          .eq('player_id', entry.player_id);
+
+      } catch (entryError) {
+        console.error(`   ❌ Failed to clean entry for player ${entry.player_id}:`, entryError);
+      }
+    }
+
+    console.log(`✅ Stale queue cleanup complete`);
+
+  } catch (error) {
+    console.error('❌ Stale queue cleanup error:', error);
+  }
+}, 5 * 60 * 1000); // Run every 5 minutes
+
+// ==============================================
+// ABANDONED TURN TIMEOUT (Background Job)
+// ==============================================
+// Runs every 30 seconds to detect abandoned turns
+// Auto-forfeits players who don't submit moves within 60 seconds
+
+setInterval(async () => {
+  try {
+    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000).toISOString();
+
+    // Find active matches with abandoned turns
+    // One player ready, other not ready, and turn started >60 seconds ago
+    const { data: gameStates, error: queryError } = await supabase
+      .from('game_states')
+      .select(`
+        *,
+        match:matches!game_states_match_id_fkey(*)
+      `)
+      .lt('turn_started_at', sixtySecondsAgo)
+      .neq('player1_ready', 'player2_ready'); // XOR - one true, one false
+
+    if (queryError) {
+      console.error('Error querying abandoned turns:', queryError);
+      return;
+    }
+
+    if (!gameStates || gameStates.length === 0) {
+      return; // No abandoned turns
+    }
+
+    console.log(`⏰ Found ${gameStates.length} abandoned turn(s)...`);
+
+    for (const state of gameStates) {
+      try {
+        const match = state.match;
+
+        // Skip if match is already completed
+        if (match.status === 'completed') {
+          continue;
+        }
+
+        // Determine who abandoned (didn't submit)
+        const player1Abandoned = !state.player1_ready && state.player2_ready;
+        const player2Abandoned = state.player1_ready && !state.player2_ready;
+
+        if (!player1Abandoned && !player2Abandoned) {
+          continue; // Both ready or both not ready, skip
+        }
+
+        const abandonedPlayerId = player1Abandoned ? match.player1_id : match.player2_id;
+        const winnerId = player1Abandoned ? match.player2_id : match.player1_id;
+
+        console.log(`   ⚠️  Player ${abandonedPlayerId.slice(0, 8)}... abandoned turn in match ${match.id}`);
+        console.log(`   🏆 Auto-win awarded to ${winnerId.slice(0, 8)}...`);
+
+        // Update match status - winner by forfeit
+        await supabase
+          .from('matches')
+          .update({
+            status: 'completed',
+            winner_id: winnerId,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', match.id);
+
+        // Update player stats
+        await supabase.rpc('increment_player_stats', {
+          p_player_id: winnerId,
+          p_wins: 1,
+          p_losses: 0
+        });
+
+        await supabase.rpc('increment_player_stats', {
+          p_player_id: abandonedPlayerId,
+          p_wins: 0,
+          p_losses: 1
+        });
+
+        console.log(`   ✅ Match ${match.id} completed (forfeit)`);
+
+      } catch (entryError) {
+        console.error(`   ❌ Failed to process abandoned turn for match ${state.match_id}:`, entryError);
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Abandoned turn cleanup error:', error);
+  }
+}, 30 * 1000); // Run every 30 seconds
+
+// ==============================================
+// GAME SYNCHRONIZATION ENDPOINTS
+// ==============================================
+
+// Submit player's turn (defenses + attacks)
+app.post('/api/game/submit-turn', async (req, res) => {
+  try {
+    const { matchId, playerId, defenses, attacks } = req.body;
+
+    // Validate input
+    if (!matchId || !playerId || !defenses || !attacks) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`🎯 Player ${playerId.slice(0, 8)}... submitted turn for match ${matchId}`);
+    console.log(`   Defenses: [${defenses}], Attacks: [${attacks}]`);
+
+    // Get current game state
+    const { data: gameState, error: gameError } = await supabase
+      .from('game_states')
+      .select('*')
+      .eq('match_id', matchId)
+      .single();
+
+    if (gameError || !gameState) {
+      return res.status(404).json({ error: 'Game state not found' });
+    }
+
+    // Get match data to determine which player this is
+    const { data: match, error: matchError } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+
+    if (matchError || !match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    const isPlayer1 = match.player1_id === playerId;
+
+    // Check if this is the first move of the turn (start timeout timer)
+    const isFirstMoveOfTurn = !gameState.player1_ready && !gameState.player2_ready;
+
+    // Update game state with player's move
+    const updateData = isPlayer1 ? {
+      player1_defenses: defenses,
+      player1_attacks: attacks,
+      player1_ready: true,
+      ...(isFirstMoveOfTurn && { turn_started_at: new Date().toISOString() })
+    } : {
+      player2_defenses: defenses,
+      player2_attacks: attacks,
+      player2_ready: true,
+      ...(isFirstMoveOfTurn && { turn_started_at: new Date().toISOString() })
+    };
+
+    const { error: updateError } = await supabase
+      .from('game_states')
+      .update(updateData)
+      .eq('match_id', matchId);
+
+    if (updateError) {
+      console.error('Error updating game state:', updateError);
+      throw updateError;
+    }
+
+    // Fetch updated state to check if both players are ready
+    const { data: updatedState, error: fetchError } = await supabase
+      .from('game_states')
+      .select('*')
+      .eq('match_id', matchId)
+      .single();
+
+    if (fetchError || !updatedState) {
+      return res.status(500).json({ error: 'Failed to fetch updated state' });
+    }
+
+    // If BOTH players ready → RESOLVE TURN
+    if (updatedState.player1_ready && updatedState.player2_ready) {
+      console.log(`⚔️  Both players ready! Resolving turn ${updatedState.current_turn}`);
+
+      // Calculate hits
+      const p1Attacks = updatedState.player1_attacks || [];
+      const p2Attacks = updatedState.player2_attacks || [];
+      const p1Defenses = updatedState.player1_defenses || [];
+      const p2Defenses = updatedState.player2_defenses || [];
+
+      // Update silo arrays
+      let p1Silos = [...updatedState.player1_silos];
+      let p2Silos = [...updatedState.player2_silos];
+
+      // Player 2 takes damage from Player 1's undefended attacks
+      for (const attackTarget of p1Attacks) {
+        if (!p2Defenses.includes(attackTarget) && p2Silos[attackTarget] > 0) {
+          p2Silos[attackTarget] -= 1;
+          console.log(`   💥 P1 hit P2 silo ${attackTarget} (now ${p2Silos[attackTarget]} HP)`);
+        }
+      }
+
+      // Player 1 takes damage from Player 2's undefended attacks
+      for (const attackTarget of p2Attacks) {
+        if (!p1Defenses.includes(attackTarget) && p1Silos[attackTarget] > 0) {
+          p1Silos[attackTarget] -= 1;
+          console.log(`   💥 P2 hit P1 silo ${attackTarget} (now ${p1Silos[attackTarget]} HP)`);
+        }
+      }
+
+      // Check for game over - game ends when a player loses 3 silos
+      const p1DestroyedCount = p1Silos.filter(hp => hp <= 0).length;
+      const p2DestroyedCount = p2Silos.filter(hp => hp <= 0).length;
+
+      let winnerId = null;
+      let matchStatus = 'active';
+
+      if (p1DestroyedCount >= 3 && p2DestroyedCount >= 3) {
+        // Draw - both players lost 3+ silos
+        winnerId = null;
+        matchStatus = 'completed';
+        console.log('   🤝 DRAW! Both players eliminated 3+ silos');
+      } else if (p2DestroyedCount >= 3) {
+        // Player 1 wins (Player 2 lost 3+ silos)
+        winnerId = match.player1_id;
+        matchStatus = 'completed';
+        console.log(`   🏆 Player 1 (${winnerId.slice(0, 8)}...) WINS! (P2 lost ${p2DestroyedCount} silos)`);
+      } else if (p1DestroyedCount >= 3) {
+        // Player 2 wins (Player 1 lost 3+ silos)
+        winnerId = match.player2_id;
+        matchStatus = 'completed';
+        console.log(`   🏆 Player 2 (${winnerId.slice(0, 8)}...) WINS! (P1 lost ${p1DestroyedCount} silos)`);
+      }
+
+      // Store moves for animation before clearing
+      const lastTurnMoves = {
+        player1_attacks: p1Attacks,
+        player1_defenses: p1Defenses,
+        player2_attacks: p2Attacks,
+        player2_defenses: p2Defenses
+      };
+
+      // Update game state
+      await supabase
+        .from('game_states')
+        .update({
+          player1_silos: p1Silos,
+          player2_silos: p2Silos,
+          current_turn: updatedState.current_turn + 1,
+          player1_ready: false,
+          player2_ready: false,
+          player1_defenses: p1Defenses, // Keep for animation
+          player1_attacks: p1Attacks,   // Keep for animation
+          player2_defenses: p2Defenses, // Keep for animation
+          player2_attacks: p2Attacks,   // Keep for animation
+          turn_resolved_at: new Date().toISOString(),
+          turn_started_at: new Date().toISOString() // Reset timer for next turn
+        })
+        .eq('match_id', matchId);
+
+      // If game over, update match status
+      if (matchStatus === 'completed') {
+        await supabase
+          .from('matches')
+          .update({
+            status: 'completed',
+            winner_id: winnerId,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', matchId);
+
+        // Update player stats
+        if (winnerId) {
+          const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
+
+          // Winner stats
+          await supabase.rpc('increment_player_stats', {
+            p_player_id: winnerId,
+            p_wins: 1,
+            p_losses: 0
+          });
+
+          // Loser stats
+          await supabase.rpc('increment_player_stats', {
+            p_player_id: loserId,
+            p_wins: 0,
+            p_losses: 1
+          });
+        }
+
+        console.log(`✅ Match ${matchId} completed`);
+      }
+
+      return res.json({
+        status: 'resolved',
+        turnResolved: true,
+        gameOver: matchStatus === 'completed',
+        winnerId: winnerId
+      });
+    }
+
+    // Only one player ready, waiting for opponent
+    res.json({
+      status: 'waiting',
+      turnResolved: false
+    });
+
+  } catch (error) {
+    console.error('❌ Submit turn error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to submit turn'
+    });
+  }
+});
+
+// Get current game state (for polling)
+app.get('/api/game/state/:matchId', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+
+    // Fetch game state
+    const { data: gameState, error: gameError } = await supabase
+      .from('game_states')
+      .select('*')
+      .eq('match_id', matchId)
+      .single();
+
+    if (gameError || !gameState) {
+      return res.status(404).json({ error: 'Game state not found' });
+    }
+
+    // Fetch match data
+    const { data: match, error: matchError } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+
+    if (matchError || !match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    res.json({
+      gameState,
+      match
+    });
+
+  } catch (error) {
+    console.error('❌ Get game state error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to get game state'
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3003;
 
 app.listen(PORT, () => {
@@ -475,5 +1069,9 @@ app.listen(PORT, () => {
   console.log(`   GET  /api/treasury/balance - Get treasury balance`);
   console.log(`   POST /api/withdraw - Process withdrawal`);
   console.log(`   POST /api/match/settle - Settle wagered match`);
-  console.log(`   POST /api/fees/collect - Collect platform fees\n`);
+  console.log(`   POST /api/fees/collect - Collect platform fees`);
+  console.log(`   POST /api/matchmaking/join - Join matchmaking queue`);
+  console.log(`   POST /api/matchmaking/leave - Leave matchmaking queue`);
+  console.log(`   POST /api/game/submit-turn - Submit player turn`);
+  console.log(`   GET  /api/game/state/:matchId - Get game state\n`);
 });

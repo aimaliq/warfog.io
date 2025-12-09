@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useMatchHistory } from '../hooks/useMatchHistory';
 import { useGlobalRank } from '../hooks/useGlobalRank';
+import { useTransactionHistory } from '../hooks/useTransactionHistory';
 
 interface ProfilePageProps {
   player: Player;
@@ -31,8 +32,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
     player.id,
     connected && publicKey ? publicKey.toBase58() : undefined
   );
+  const { transactions, isLoading: isLoadingTransactions } = useTransactionHistory(player.id);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Local state for currently displayed values
   const [currentUsername, setCurrentUsername] = useState(player.username);
@@ -243,6 +246,20 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           .eq('id', player.id);
 
         if (error) throw error;
+
+        // Log transaction to history
+        const { error: txError } = await supabase
+          .from('transactions')
+          .insert({
+            player_id: player.id,
+            type: 'deposit',
+            amount: amount,
+            signature: signature
+          });
+
+        if (txError) {
+          console.error('Warning: Failed to log transaction history:', txError);
+        }
       }
 
       // Update local balance
@@ -342,12 +359,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
               <FlagIcon countryCode={currentCountry} width="96px" height="72px" />
             </button>
             <div className="flex-1">
-              <div className="text-lime-500 font-black text-2xl">
+              <div className="text-yellow-500 font-black text-3xl">
                 {connected && publicKey
                   ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
                   : 'GUEST_MODE'}
               </div>
-              <div className="text-LG text-gray-600 font-mono">{currentUsername}</div>
+              <div className="text-xl text-lime-500 font-mono">{currentUsername}</div>
             </div>
           </div>
 
@@ -355,12 +372,15 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           {connected && publicKey && (
             <div className="mb-3 space-y-2">
               <div className="border border-lime-700 px-3 py-2 flex justify-between items-center">
-                <span className="text-lime-500 text-lg font-bold">GAME BALANCE:<br/>{gameBalance.toFixed(2)} SOL</span>
+                <span className="text-lime-500 text-center text-2xl font-bold">GAME BALANCE:<br/>{gameBalance.toFixed(2)} SOL</span>
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => {
                       setIsDepositOpen(!isDepositOpen);
-                      if (!isDepositOpen) setIsWithdrawOpen(false);
+                      if (!isDepositOpen) {
+                        setIsWithdrawOpen(false);
+                        setIsHistoryOpen(false);
+                      }
                     }}
                     className="px-4 py-1 bg-lime-900/40 border border-lime-500 text-lime-400 text-sm font-bold hover:bg-lime-900/60 transition-all"
                   >
@@ -369,11 +389,26 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                   <button
                     onClick={() => {
                       setIsWithdrawOpen(!isWithdrawOpen);
-                      if (!isWithdrawOpen) setIsDepositOpen(false);
+                      if (!isWithdrawOpen) {
+                        setIsDepositOpen(false);
+                        setIsHistoryOpen(false);
+                      }
                     }}
                     className="px-4 py-1 bg-amber-900/40 border border-amber-700 text-amber-400 text-sm font-bold hover:bg-amber-900/60 transition-all"
                   >
                     WITHDRAW
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsHistoryOpen(!isHistoryOpen);
+                      if (!isHistoryOpen) {
+                        setIsDepositOpen(false);
+                        setIsWithdrawOpen(false);
+                      }
+                    }}
+                    className="px-4 py-1 bg-gray-900/40 border border-gray-500 text-gray-400 text-sm font-bold hover:bg-gray-900/60 transition-all"
+                  >
+                    HISTORY
                   </button>
                 </div>
               </div>
@@ -456,6 +491,77 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                     >
                       {isWithdrawing ? 'PROCESSING...' : 'CONFIRM WITHDRAWAL'}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Transaction History Section */}
+              {isHistoryOpen && (
+                <div className="border border-gray-500 p-3 bg-black/40 animate-fadeIn">
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {isLoadingTransactions ? (
+                      <div className="text-center py-8 text-gray-500 text-sm">
+                        Loading transaction history...
+                      </div>
+                    ) : transactions.length > 0 ? (
+                      <table className="w-full">
+                        <tbody className="divide-y divide-gray-700/30">
+                          {transactions.map((tx) => {
+                            const getTimeAgo = (date: Date) => {
+                              const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+                              if (seconds < 60) return `${seconds}s`;
+                              const minutes = Math.floor(seconds / 60);
+                              if (minutes < 60) return `${minutes}m`;
+                              const hours = Math.floor(minutes / 60);
+                              if (hours < 24) return `${hours}h`;
+                              const days = Math.floor(hours / 24);
+                              return `${days}d`;
+                            };
+
+                            const isDeposit = tx.operation === 'deposit';
+                            const amountDisplay = isDeposit ? `+${tx.amount.toFixed(2)}` : `-${tx.amount.toFixed(2)}`;
+                            const shortenedSignature = tx.signature.length > 8
+                              ? `${tx.signature.slice(0, 4)}...${tx.signature.slice(-4)}`
+                              : tx.signature;
+
+                            // Determine network cluster for Solscan link
+                            const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+                            const isMainnet = rpcUrl.includes('mainnet');
+                            const clusterParam = isMainnet ? '' : '?cluster=devnet';
+
+                            return (
+                              <tr key={tx.id} className="hover:bg-gray-900/10 transition-all">
+                                <td className="pl-3 pr-2 py-2">
+                                  <span className={`font-mono text-sm ${isDeposit ? 'text-lime-500' : 'text-red-500'}`}>
+                                    {amountDisplay}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-2">
+                                  <span className="text-gray-400 text-sm uppercase">{tx.operation}</span>
+                                </td>
+                                <td className="px-2 py-2">
+                                  <a
+                                    href={`https://solscan.io/tx/${tx.signature}${clusterParam}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:text-blue-300 font-mono text-sm underline"
+                                  >
+                                    {shortenedSignature}
+                                  </a>
+                                </td>
+                                <td className="pr-3 pl-2 py-2 text-right">
+                                  <span className="text-gray-600 text-xs">{getTimeAgo(tx.createdAt)}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="text-center py-8 text-gray-600 text-sm">
+                        No transaction history yet
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -599,47 +705,59 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         {/* Match History */}
         <div className="bg-black/60 border-2 border-lime-900">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
-            <h2 className="text-lime-500 font-bold text-sm tracking-widest">RECENT OPERATIONS</h2>
+            <h2 className="text-lime-500 font-bold text-md tracking-widest">RECENT BATTLES</h2>
           </div>
-          <div className="divide-y divide-lime-900/30">
+          <div className="max-h-[220px] overflow-y-auto">
             {isLoadingMatches ? (
               <div className="text-center py-8 text-gray-500 text-sm">
                 Loading match history...
               </div>
             ) : matches.length > 0 ? (
-              matches.map((match) => {
-                const getTimeAgo = (date: Date) => {
-                  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-                  if (seconds < 60) return `${seconds}s ago`;
-                  const minutes = Math.floor(seconds / 60);
-                  if (minutes < 60) return `${minutes}m ago`;
-                  const hours = Math.floor(minutes / 60);
-                  if (hours < 24) return `${hours}h ago`;
-                  const days = Math.floor(hours / 24);
-                  return `${days}d ago`;
-                };
+              <table className="w-full">
+                <tbody className="divide-y divide-lime-900/30">
+                  {matches.map((match) => {
+                    const getTimeAgo = (date: Date) => {
+                      const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+                      if (seconds < 60) return `${seconds}s`;
+                      const minutes = Math.floor(seconds / 60);
+                      if (minutes < 60) return `${minutes}m`;
+                      const hours = Math.floor(minutes / 60);
+                      if (hours < 24) return `${hours}h`;
+                      const days = Math.floor(hours / 24);
+                      return `${days}d`;
+                    };
 
-                return (
-                  <div key={match.id} className="px-4 py-3 hover:bg-lime-900/10 transition-all">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="text-lime-500 font-bold text-sm">vs {match.opponentUsername}</div>
-                        <div className="text-[10px] text-gray-600">{match.opponent}</div>
-                        <div className="text-[10px] text-gray-600">{getTimeAgo(match.playedAt)}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`font-bold text-sm ${match.result === 'VICTORY' ? 'text-lime-500' : 'text-red-500'}`}>
-                          {match.result}
-                        </div>
-                        <div className="text-[10px] text-gray-600">Damage: {match.damageDealt}/{match.damageTaken}</div>
-                        {match.betAmount && (
-                          <div className="text-[10px] text-yellow-600">{match.betAmount} SOL</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+                    const isWin = match.result === 'WON';
+                    const amountDisplay = match.wagerAmount > 0
+                      ? (isWin ? `+${(match.wagerAmount * 1.9).toFixed(2)}` : `-${match.wagerAmount.toFixed(2)}`)
+                      : 'FREE';
+
+                    return (
+                      <tr key={match.id} className="hover:bg-lime-900/10 transition-all">
+                        <td className="pl-4 pr-2 py-2">
+                          <span className={`font-bold text-sm ${isWin ? 'text-lime-500' : 'text-red-500'}`}>
+                            {match.result}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className={`font-mono text-sm ${match.wagerAmount === 0 ? 'text-gray-500' : isWin ? 'text-lime-500' : 'text-red-500'}`}>
+                            {amountDisplay}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <span className="text-yellow-500 font-mono text-sm">{match.opponentWallet}</span>
+                        </td>
+                        <td className="px-2 py-2">
+                          <FlagIcon countryCode={match.opponentCountry} width="20px" height="14px" />
+                        </td>
+                        <td className="pr-4 pl-2 py-2 text-right">
+                          <span className="text-gray-600 text-xs">{getTimeAgo(match.playedAt)}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             ) : (
               <div className="text-center py-8 text-gray-600 text-sm">
                 No match history yet

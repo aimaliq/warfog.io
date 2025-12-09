@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Player } from '../types';
-import { FlagIcon } from './FlagIcon';
 import { WalletButton } from './WalletButton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useOnlinePlayers } from '../hooks/useOnlinePlayers';
@@ -10,38 +9,36 @@ import { WinsTicker } from './WinsTicker';
 
 interface LobbyPageProps {
   player: Player;
-  onStartBattle: () => void;
+  onStartBattle: (matchId?: string) => void;
   matches?: any[];
   onMatchesChange?: (matches: any[]) => void;
   isInBattle?: boolean;
 }
 
-interface Match {
-  id: string;
-  betAmount: number;
-  creator: string;
-  createdAt: Date;
-  flag: string;
-}
-
 export const LobbyPage: React.FC<LobbyPageProps> = ({
   player,
   onStartBattle,
-  matches: propMatches = [],
-  onMatchesChange,
   isInBattle = false
 }) => {
   const { connected, publicKey } = useWallet();
   const { onlineCount, isLoading } = useOnlinePlayers();
   const { wins } = useRecentWins();
   const [isHowToPlayOpen, setIsHowToPlayOpen] = useState(false);
-  const [selectedBet, setSelectedBet] = useState<number>(0.1);
+  const [selectedBet, setSelectedBet] = useState<number>(0.01);
   const [gameBalance, setGameBalance] = useState<number>(0);
   const [isLoadingBalance, setIsLoadingBalance] = useState(true);
   const [balanceError, setBalanceError] = useState<string | null>(null);
 
-  // Use prop matches or fall back to empty array
-  const matches = propMatches;
+  // Queue state
+  const [queueStatus, setQueueStatus] = useState<'idle' | 'queued' | 'matched'>('idle');
+  const [searchingWager, setSearchingWager] = useState<number | null>(null);
+  const [matchmakingError, setMatchmakingError] = useState<string | null>(null);
+  const [rotationAngle, setRotationAngle] = useState(0);
+  const [queueCount, setQueueCount] = useState<number>(0);
+
+  // Shake animation state for Latest Wins
+  const [previousWinsCount, setPreviousWinsCount] = useState<number>(0);
+  const [isWinsShaking, setIsWinsShaking] = useState(false);
 
   // Fetch user's game balance
   useEffect(() => {
@@ -77,89 +74,182 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     return () => clearInterval(interval);
   }, [player.id]);
 
-  const handleCreateMatch = async () => {
-    if (!connected || !publicKey) {
-      return;
-    }
+  // Poll for match creation when in queue (more reliable than Realtime subscriptions)
+  useEffect(() => {
+    if (queueStatus !== 'queued' || !player.id) return;
 
-    // Check if user has sufficient balance
-    if (gameBalance < selectedBet) {
-      setBalanceError(`Insufficient balance. You have ${gameBalance.toFixed(2)} SOL but need ${selectedBet.toFixed(1)} SOL`);
+    // Track when we started searching - only match on games created AFTER this
+    const searchStartTime = new Date().toISOString();
+    console.log(`🔄 Starting match polling for player ${player.id} at ${searchStartTime}`);
+
+    const checkForMatch = async () => {
+      try {
+        // Check if match was created AFTER we joined the queue
+        const { data: match, error } = await supabase
+          .from('matches')
+          .select('*')
+          .or(`player1_id.eq.${player.id},player2_id.eq.${player.id}`)
+          .eq('status', 'active')
+          .gte('created_at', searchStartTime)  // Only matches created after we joined queue
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error checking for match:', error);
+          return;
+        }
+
+        if (match) {
+          console.log('✅ Match found! Transitioning to battle...', match.id);
+          setQueueStatus('matched');
+          onStartBattle(match.id);
+        }
+      } catch (error) {
+        console.error('Error in match polling:', error);
+      }
+    };
+
+    // Check immediately, then every second
+    checkForMatch();
+    const interval = setInterval(checkForMatch, 1000);
+
+    return () => {
+      console.log('⏹️ Stopping match polling');
+      clearInterval(interval);
+    };
+  }, [queueStatus, player.id]);
+
+  // Nuclear icon rotation animation
+  useEffect(() => {
+    if (queueStatus !== 'queued') return;
+
+    const interval = setInterval(() => {
+      setRotationAngle(prev => (prev + 45) % 360);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [queueStatus]);
+
+  // Queue count monitoring
+  useEffect(() => {
+    if (queueStatus !== 'queued' || !searchingWager) return;
+
+    const fetchQueueCount = async () => {
+      const { data } = await supabase
+        .from('matchmaking_queue')
+        .select('id')
+        .eq('wager_amount', searchingWager);
+
+      // Subtract 1 to exclude current player
+      setQueueCount(Math.max(0, (data?.length || 0) - 1));
+    };
+
+    fetchQueueCount();
+    const interval = setInterval(fetchQueueCount, 3000);
+    return () => clearInterval(interval);
+  }, [queueStatus, searchingWager]);
+
+  // Timeout auto-cancel (3 minutes)
+  useEffect(() => {
+    if (queueStatus !== 'queued') return;
+
+    const timeout = setTimeout(() => {
+      setMatchmakingError('Matchmaking timed out. Please try again.');
+      handleCancelQueue();
+    }, 180000);
+
+    return () => clearTimeout(timeout);
+  }, [queueStatus]);
+
+  // Browser close cleanup
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (queueStatus === 'queued' && player.id) {
+        const blob = new Blob(
+          [JSON.stringify({ playerId: player.id })],
+          { type: 'application/json' }
+        );
+        navigator.sendBeacon(
+          `${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/leave`,
+          blob
+        );
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [queueStatus, player.id]);
+
+  // Detect new wins for shake animation
+  useEffect(() => {
+    if (wins.length > previousWinsCount && previousWinsCount > 0) {
+      setIsWinsShaking(true);
+      setTimeout(() => setIsWinsShaking(false), 500);
+    }
+    setPreviousWinsCount(wins.length);
+  }, [wins.length]);
+
+  const handleJoinQueue = async (wager: number) => {
+    if (!connected || !publicKey) return;
+
+    if (gameBalance < wager) {
+      setBalanceError(`Insufficient balance. You have ${gameBalance.toFixed(2)} SOL but need ${wager.toFixed(2)} SOL`);
       setTimeout(() => setBalanceError(null), 5000);
       return;
     }
 
     try {
-      // Save match to database and deduct bet amount
-      const { data: matchData, error: matchError } = await supabase
-        .from('matches')
-        .insert({
-          player1_id: player.id,
-          status: 'waiting',
-          wager_amount: selectedBet,
-        })
-        .select()
-        .single();
+      setQueueStatus('queued');
+      setSearchingWager(wager);
+      setMatchmakingError(null);
 
-      if (matchError) throw matchError;
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: player.id, wagerAmount: wager })
+      });
 
-      // Deduct bet amount from player's game balance
-      const { error: balanceError } = await supabase
-        .from('players')
-        .update({ game_balance: gameBalance - selectedBet })
-        .eq('id', player.id);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to join queue');
 
-      if (balanceError) {
-        // Rollback: Delete the match if balance update failed
-        await supabase.from('matches').delete().eq('id', matchData.id);
-        throw balanceError;
+      if (result.status === 'matched') {
+        // Instant match found
+        setQueueStatus('matched');
+        setGameBalance(prev => prev - wager);
+        onStartBattle(result.matchId);
+      } else {
+        // Waiting for opponent
+        setGameBalance(prev => prev - wager);
       }
-
-      // Update local balance
-      setGameBalance(prev => prev - selectedBet);
-
-      // Add to matchmaking queue
-      const { error: queueError } = await supabase
-        .from('matchmaking_queue')
-        .insert({
-          player_id: player.id,
-          wager_amount: selectedBet,
-        });
-
-      if (queueError) {
-        console.error('Error joining matchmaking queue:', queueError);
-        // Don't fail the whole operation if queue fails
-      }
-
-      // Create local match object for display
-      const newMatch: Match = {
-        id: matchData.id,
-        betAmount: selectedBet,
-        creator: publicKey.toBase58().slice(0, 4) + '...' + publicKey.toBase58().slice(-4),
-        createdAt: new Date(matchData.created_at),
-        flag: player.countryFlag,
-      };
-
-      // Update matches through parent component
-      if (onMatchesChange) {
-        onMatchesChange([...matches, newMatch]);
-      }
-
-      setBalanceError(null);
     } catch (error: any) {
-      console.error('Error creating match:', error);
-      setBalanceError(error.message || 'Failed to create match. Please try again.');
+      setMatchmakingError(error.message || 'Failed to join matchmaking');
+      setQueueStatus('idle');
+      setSearchingWager(null);
     }
   };
 
-  const getTimeAgo = (date: Date) => {
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
+  const handleCancelQueue = async () => {
+    if (!searchingWager) return;
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: player.id })
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+
+      setGameBalance(prev => prev + result.refundedAmount);
+      setQueueStatus('idle');
+      setSearchingWager(null);
+    } catch (error: any) {
+      setMatchmakingError(error.message || 'Failed to cancel');
+    }
   };
+
   return (
     <div className="flex flex-col items-center px-4 py-8">
       <div className="w-full max-w-2xl">
@@ -195,8 +285,8 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
               <div className="mb-4 pt-4 bg-yellow-900/25 border border-yellow-900/100 p-3">
                 <div className="flex items-start gap-2">
                   <div>
-                    <p className="text-xs text-lime-500/90 text-center leading-relaxed">
-                      In this game you can't see the enemy HP or which nuclear silos they are defending. You must predict, adapt, and outthink your opponent! This concept is referred to as FOG OF WAR.
+                    <p className="text-sm text-lime-500/90 text-center leading-relaxed">
+                      In this game you can't see the enemy HP or which nuclear silos they are defending. This concept is referred to as FOG OF WAR. You must predict, adapt, and outthink your opponent!
                     </p>
                   </div>
                 </div>
@@ -292,7 +382,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
           </svg>
           <button
-            onClick={onStartBattle}
+            onClick={() => onStartBattle()}
             disabled={isInBattle}
             className="w-full py-6 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-2xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
           >
@@ -306,7 +396,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
         {/* Live Operations Table */}
         <div className="bg-black/60 border-2 border-lime-900">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10 flex justify-between items-center">
-            <h2 className="text-lime-500 font-bold text-md tracking-widest">SOL OPERATIONS</h2>
+            <h2 className="text-lime-500 font-bold text-md tracking-widest">SOL BATTLES</h2>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
@@ -316,7 +406,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           </div>
           <div className="p-4 space-y-4">
 
-            {/* Create Match Section */}
+            {/* Queue-Based Matchmaking */}
             <div className="space-y-3">
               {/* Balance Display */}
               {connected && (
@@ -328,55 +418,38 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </div>
               )}
 
+              {/* Wager Selection + Join Button */}
+              {/* NOTE: Testing with [0.01, 0.05, 0.1] - change to [0.1, 0.5, 1] for production */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <span className="text-lime-500 font-bold text-sm sm:block hidden">SOL</span>
                 <div className="flex gap-2 flex-1 mb-2">
-                  <button
-                    onClick={() => setSelectedBet(0.1)}
-                    disabled={!connected || isInBattle}
-                    className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                      selectedBet === 0.1
-                        ? 'bg-lime-900/40 border-lime-500 text-lime-400'
-                        : 'bg-gray-900 border-lime-900 text-lime-500 hover:border-lime-500 hover:bg-lime-900/20'
-                    }`}
-                  >
-                    0,1
-                  </button>
-                  <button
-                    onClick={() => setSelectedBet(0.5)}
-                    disabled={!connected || isInBattle}
-                    className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                      selectedBet === 0.5
-                        ? 'bg-lime-900/40 border-lime-500 text-lime-400'
-                        : 'bg-gray-900 border-lime-900 text-lime-500 hover:border-lime-500 hover:bg-lime-900/20'
-                    }`}
-                  >
-                    0,5
-                  </button>
-                  <button
-                    onClick={() => setSelectedBet(1)}
-                    disabled={!connected || isInBattle}
-                    className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-                      selectedBet === 1
-                        ? 'bg-lime-900/40 border-lime-500 text-lime-400'
-                        : 'bg-gray-900 border-lime-900 text-lime-500 hover:border-lime-500 hover:bg-lime-900/20'
-                    }`}
-                  >
-                    1
-                  </button>
+                  {[0.01, 0.05, 0.1].map(wager => (
+                    <button
+                      key={wager}
+                      onClick={() => setSelectedBet(wager)}
+                      disabled={!connected || isInBattle || queueStatus === 'queued'}
+                      className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                        selectedBet === wager
+                          ? 'bg-lime-900/40 border-lime-500 text-lime-400'
+                          : 'bg-gray-900 border-lime-900 text-lime-500 hover:border-lime-500 hover:bg-lime-900/20'
+                      }`}
+                    >
+                      {wager.toFixed(2)}
+                    </button>
+                  ))}
                 </div>
                 <button
-                  onClick={handleCreateMatch}
-                  disabled={!connected || gameBalance < selectedBet || isInBattle}
+                  onClick={() => handleJoinQueue(selectedBet)}
+                  disabled={!connected || gameBalance < selectedBet || isInBattle || queueStatus === 'queued'}
                   className="w-full sm:w-auto px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all text-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
                 >
-                  CREATE SOL MATCH
+                  JOIN SOL MATCH
                 </button>
               </div>
 
               {!connected && (
                 <div className="text-center text-xs text-yellow-600">
-                  Connect wallet to create a match
+                  Connect wallet to join matchmaking
                 </div>
               )}
 
@@ -385,49 +458,103 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   <span className="text-red-500 text-xs font-bold">{balanceError}</span>
                 </div>
               )}
+
+              {matchmakingError && (
+                <div className="bg-red-900/20 border border-red-700 px-3 py-2">
+                  <span className="text-red-500 text-xs font-bold">{matchmakingError}</span>
+                </div>
+              )}
             </div>
 
-            {/* Active Matches */}
-            {matches.length === 0 ? (
-              <div className="text-center text-gray-600 text-md py-4">
-                No operations detected
-                <div className="text-xs mt-2">Create a match or check back soon</div>
+            {/* Searching State or Empty Message */}
+            {queueStatus === 'queued' && searchingWager !== null ? (
+              <div className="border border-lime-500 bg-lime-900/20 p-6 space-y-4">
+                <div className="text-center space-y-3">
+                  {/* Rotating Nuclear Icon */}
+                  <div
+                    className="inline-block text-5xl transition-transform duration-200"
+                    style={{ transform: `rotate(${rotationAngle}deg)` }}
+                  >
+                    ☢
+                  </div>
+
+                  <div className="text-lime-400 font-bold text-lg animate-pulse">
+                    Searching for an opponent...
+                  </div>
+
+                  <div className="text-gray-400 text-sm">
+                    Bet: <span className="text-lime-500 font-bold">{searchingWager.toFixed(2)} SOL</span>
+                  </div>
+
+                  {/* Queue Count Display */}
+                  {queueCount > 0 && (
+                    <div className="text-gray-500 text-xs">
+                      {queueCount} other player{queueCount > 1 ? 's' : ''} searching
+                    </div>
+                  )}
+                </div>
+
+                {/* Cancel Button */}
+                <button
+                  onClick={handleCancelQueue}
+                  className="w-full px-6 py-3 bg-red-900/40 border-2 border-red-500 text-red-400 font-bold hover:bg-red-900/60 transition-all"
+                >
+                  CANCEL
+                </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {matches.map((match) => (
-                  <div
-                    key={match.id}
-                    className="flex items-center justify-between border border-lime-900 bg-black/40 p-3 hover:bg-lime-900/10 transition-all"
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <FlagIcon countryCode={match.flag} width="32px" height="24px" />
-                      <div className="flex flex-col">
-                        <div className="text-lime-500 font-bold text-xs font-mono">
-                          {match.creator}
-                        </div>
-                        <div className="text-[10px] text-gray-600">
-                          {getTimeAgo(match.createdAt)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <div className="text-lime-500 font-bold text-sm font-mono">
-                          {match.betAmount.toFixed(1)} SOL
-                        </div>
-                      </div>
-                      <button
-                        onClick={onStartBattle}
-                        disabled={isInBattle}
-                        className="px-4 py-2 bg-lime-900/40 border border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all text-xs whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
-                      >
-                        JOIN
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <div className="text-center text-gray-600 text-sm py-2">Select a bet to join matchmaking</div>
+            )}
+          </div>
+        </div>
+
+        {/* Latest Wins Table */}
+        <div className={`mt-6 bg-black/60 border-2 border-lime-900 transition-transform ${isWinsShaking ? 'animate-shake' : ''}`}>
+          <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
+            <h2 className="text-lime-500 font-bold text-md tracking-widest">LATEST WINS</h2>
+          </div>
+          <div className="p-4">
+            {wins.length > 0 ? (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700/30">
+                    <th className="text-left px-3 py-2 text-gray-500 text-md uppercase tracking-wider">WINNER</th>
+                    <th className="text-center px-3 py-2 text-gray-500 text-md uppercase tracking-wider">SOL</th>
+                    <th className="text-right px-3 py-2 text-gray-500 text-md uppercase tracking-wider">DATE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/30">
+                  {wins.slice(0, 10).map((win) => {
+                    const timeAgo = Math.floor((Date.now() - win.timestamp) / 1000);
+                    let timeDisplay = '';
+                    if (timeAgo < 60) {
+                      timeDisplay = `${timeAgo}s ago`;
+                    } else if (timeAgo < 3600) {
+                      timeDisplay = `${Math.floor(timeAgo / 60)}m ago`;
+                    } else if (timeAgo < 86400) {
+                      timeDisplay = `${Math.floor(timeAgo / 3600)}h ago`;
+                    } else {
+                      timeDisplay = `${Math.floor(timeAgo / 86400)}d ago`;
+                    }
+
+                    return (
+                      <tr key={win.id} className="hover:bg-gray-900/10 transition-all">
+                        <td className="px-3 py-2">
+                          <span className="text-yellow-500 font-mono text-sm">{win.winnerWallet}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span className="text-lime-500 font-bold text-sm">+ {win.amount.toFixed(2)}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span className="text-gray-600 text-sm">{timeDisplay}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-center py-8 text-gray-600 text-sm">No wins yet</div>
             )}
           </div>
         </div>

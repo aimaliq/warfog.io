@@ -74,6 +74,7 @@ const updateGameResults = async (
 interface BattleScreenProps {
   gameState: GameState;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
+  matchId?: string | null;
 }
 
 // Missile component for visual effects
@@ -207,12 +208,287 @@ const BaseIcon = ({
   );
 };
 
-export default function BattleScreen({ gameState, setGameState }: BattleScreenProps) {
+export default function BattleScreen({ gameState, setGameState, matchId }: BattleScreenProps) {
   const player = gameState.player1;
   const enemy = gameState.player2;
 
   const [selectedDefenses, setSelectedDefenses] = useState<number[]>([]);
   const [selectedTargets, setSelectedTargets] = useState<number[]>([]);
+  const [matchDataLoaded, setMatchDataLoaded] = useState(false);
+
+  // Turn synchronization state
+  const [waitingForOpponent, setWaitingForOpponent] = useState(false);
+  const [lastTurnResolvedAt, setLastTurnResolvedAt] = useState<string | null>(null);
+  const [submittedMoves, setSubmittedMoves] = useState<{defenses: number[], attacks: number[]} | null>(null);
+
+  // Load real opponent data when matchId exists
+  useEffect(() => {
+    if (!matchId || matchDataLoaded) return;
+
+    const loadMatchData = async () => {
+      try {
+        console.log(`🔄 Loading match data for matchId: ${matchId}`);
+
+        // Fetch match data
+        const { data: match, error: matchError } = await supabase
+          .from('matches')
+          .select('*')
+          .eq('id', matchId)
+          .single();
+
+        if (matchError || !match) {
+          console.error('Error loading match:', matchError);
+          return;
+        }
+
+        // Fetch both players' data
+        const { data: players, error: playersError } = await supabase
+          .from('players')
+          .select('*')
+          .in('id', [match.player1_id, match.player2_id]);
+
+        if (playersError || !players || players.length !== 2) {
+          console.error('Error loading players:', playersError);
+          return;
+        }
+
+        // Determine which player is current user and which is opponent
+        const player1Data = players.find(p => p.id === match.player1_id);
+        const player2Data = players.find(p => p.id === match.player2_id);
+
+        if (!player1Data || !player2Data) {
+          console.error('Could not find player data');
+          return;
+        }
+
+        // Determine if current user is player1 or player2
+        const isPlayer1 = gameState.player1.id === match.player1_id;
+        const opponentData = isPlayer1 ? player2Data : player1Data;
+
+        console.log(`✅ Loaded opponent: ${opponentData.username} (${opponentData.wallet_address?.slice(0, 8)}...)`);
+
+        // Update game state with real opponent
+        setGameState(prev => ({
+          ...prev,
+          player2: {
+            ...prev.player2,
+            id: opponentData.id,
+            username: opponentData.username || 'UNKNOWN',
+            countryFlag: opponentData.country_code || 'xx',
+            isGuest: opponentData.is_guest || false,
+            wins: opponentData.total_wins || 0,
+            losses: opponentData.total_losses || 0,
+            gamesPlayed: (opponentData.total_wins || 0) + (opponentData.total_losses || 0),
+            winRate: (opponentData.total_wins || 0) + (opponentData.total_losses || 0) > 0
+              ? ((opponentData.total_wins || 0) / ((opponentData.total_wins || 0) + (opponentData.total_losses || 0))) * 100
+              : 0,
+            currentStreak: opponentData.current_streak || 0,
+            longestStreak: opponentData.best_streak || 0,
+          },
+          betAmount: match.wager_amount || 0
+        }));
+
+        setMatchDataLoaded(true);
+      } catch (error) {
+        console.error('Error in loadMatchData:', error);
+      }
+    };
+
+    loadMatchData();
+  }, [matchId, gameState.player1.id, matchDataLoaded]);
+
+  // Poll for game state updates when waiting for opponent or turn resolution
+  useEffect(() => {
+    if (!matchId || !waitingForOpponent) return;
+
+    console.log('🔄 Starting game state polling...');
+
+    const pollGameState = async () => {
+      try {
+        const response = await fetch(`http://localhost:3003/api/game/state/${matchId}`);
+        const data = await response.json();
+
+        if (!data.gameState || !data.match) {
+          console.error('Invalid game state response:', data);
+          return;
+        }
+
+        const { gameState: serverState, match } = data;
+
+        // Check if turn has been resolved (turn_resolved_at changed)
+        if (serverState.turn_resolved_at && serverState.turn_resolved_at !== lastTurnResolvedAt) {
+          console.log('✅ Turn resolved! Applying server state...');
+          setLastTurnResolvedAt(serverState.turn_resolved_at);
+          setWaitingForOpponent(false);
+
+          // Apply server-resolved game state
+          applyServerResolvedTurn(serverState, match);
+        }
+      } catch (error) {
+        console.error('❌ Error polling game state:', error);
+      }
+    };
+
+    // Poll immediately, then every second
+    pollGameState();
+    const interval = setInterval(pollGameState, 1000);
+
+    return () => {
+      console.log('⏹️ Stopping game state polling');
+      clearInterval(interval);
+    };
+  }, [matchId, waitingForOpponent, lastTurnResolvedAt]);
+
+  // Function to apply server-resolved turn and trigger animations
+  const applyServerResolvedTurn = useCallback((serverState: any, match: any) => {
+    console.log('🎮 Applying server-resolved turn:', serverState);
+
+    // Determine if current player is player1 or player2 in the match
+    const isPlayer1 = gameState.player1.id === match.player1_id;
+
+    // Get silo HP arrays from server
+    const playerSilos = isPlayer1 ? serverState.player1_silos : serverState.player2_silos;
+    const enemySilos = isPlayer1 ? serverState.player2_silos : serverState.player1_silos;
+
+    // Get the moves that were submitted
+    const playerDefenses = isPlayer1 ? serverState.player1_defenses : serverState.player2_defenses;
+    const playerAttacks = isPlayer1 ? serverState.player1_attacks : serverState.player2_attacks;
+    const enemyDefenses = isPlayer1 ? serverState.player2_defenses : serverState.player1_defenses;
+    const enemyAttacks = isPlayer1 ? serverState.player2_attacks : serverState.player1_attacks;
+
+    // Show missiles animation
+    setMessage("LAUNCH DETECTED. MISSILES AWAY.");
+    setMissileTargets({ player: playerAttacks || [], enemy: enemyAttacks || [] });
+    setShowMissiles(true);
+    playMissilesSound();
+
+    // After 1.5s: Impact + apply server state
+    setTimeout(() => {
+      setShake(true);
+      setMessage("IMPACT CONFIRMED. ANALYZING DAMAGE.");
+      playExplosionSound();
+      setTimeout(() => setShake(false), 200);
+
+      // Apply server state to local game
+      setGameState(current => {
+        // Convert silo HP arrays to base objects
+        const newPlayerBases = playerSilos.map((hp: number, index: number) => ({
+          id: index,
+          hp: hp,
+          isDestroyed: hp <= 0
+        }));
+
+        const newEnemyBases = enemySilos.map((hp: number, index: number) => ({
+          id: index,
+          hp: hp,
+          isDestroyed: hp <= 0
+        }));
+
+        // Count destroyed bases
+        const playerDestroyed = newPlayerBases.filter((b: Base) => b.isDestroyed).length;
+        const enemyDestroyed = newEnemyBases.filter((b: Base) => b.isDestroyed).length;
+
+        // Calculate total HP
+        const playerTotalHP = playerSilos.reduce((sum: number, hp: number) => sum + hp, 0);
+        const enemyTotalHP = enemySilos.reduce((sum: number, hp: number) => sum + hp, 0);
+
+        // Calculate destructions this turn for notifications
+        const playerDestroyedBefore = current.player1.bases.filter((b: Base) => b.isDestroyed).length;
+        const enemyDestroyedBefore = current.player2.bases.filter((b: Base) => b.isDestroyed).length;
+        const playerDestroyedThisTurn = playerDestroyed - playerDestroyedBefore;
+        const enemyDestroyedThisTurn = enemyDestroyed - enemyDestroyedBefore;
+
+        setLastTurnDestructions({
+          player: playerDestroyedThisTurn,
+          enemy: enemyDestroyedThisTurn,
+          playerStartIndex: playerDestroyedBefore,
+          enemyStartIndex: enemyDestroyedBefore
+        });
+
+        return {
+          ...current,
+          player1: {
+            ...current.player1,
+            bases: newPlayerBases,
+            basesDestroyed: playerDestroyed,
+            totalHP: playerTotalHP,
+            pendingHP: 0 // Reset pending HP
+          },
+          player2: {
+            ...current.player2,
+            bases: newEnemyBases,
+            basesDestroyed: enemyDestroyed,
+            totalHP: enemyTotalHP,
+            pendingHP: 0
+          },
+          phase: GamePhase.RESOLVING,
+          currentTurn: serverState.current_turn
+        };
+      });
+
+      setShowMissiles(false);
+
+      // Show destruction notifications
+      setTimeout(() => {
+        setShowDestructionCount(true);
+
+        setLastTurnDestructions(latest => {
+          setHighlightedIcons({ player: [], enemy: [] });
+          setIconsShrinking({ player: [], enemy: [] });
+
+          const playerHighlights = latest.player > 0
+            ? Array.from({ length: latest.player }, (_, i) => latest.playerStartIndex + i)
+            : [];
+          const enemyHighlights = latest.enemy > 0
+            ? Array.from({ length: latest.enemy }, (_, i) => latest.enemyStartIndex + i)
+            : [];
+
+          if (playerHighlights.length > 0 || enemyHighlights.length > 0) {
+            setHighlightedIcons({ player: playerHighlights, enemy: enemyHighlights });
+
+            setTimeout(() => {
+              setIconsShrinking({ player: playerHighlights, enemy: enemyHighlights });
+              setTimeout(() => setIconsShrinking({ player: [], enemy: [] }), 600);
+            }, 1200);
+
+            setTimeout(() => setHighlightedIcons({ player: [], enemy: [] }), 1200);
+          }
+
+          return latest;
+        });
+
+        // Check for game over
+        setTimeout(() => {
+          setShowDestructionCount(false);
+
+          if (match.status === 'completed') {
+            // Game over
+            console.log('🏁 Game over! Winner:', match.winner_id);
+
+            setGameState(current => {
+              const winner = match.winner_id || 'TIE';
+              const winReason = winner === 'TIE' ? 'TIE_HP' : 'BASES_DESTROYED';
+
+              return {
+                ...current,
+                phase: GamePhase.GAME_OVER,
+                winner,
+                winReason
+              };
+            });
+          } else {
+            // Continue to next turn
+            setGameState(prev => ({
+              ...prev,
+              phase: GamePhase.PLANNING,
+              turnTimeLeft: 10000
+            }));
+          }
+        }, 2000);
+      }, 200);
+    }, 1500);
+  }, [gameState.player1.id, setGameState]);
+
   const [message, setMessage] = useState<string>("SHIELD YOUR SILOS (2) & STRIKE ENEMY (3)");
   const [shake, setShake] = useState(false);
   const [isAllocatingHP, setIsAllocatingHP] = useState(false);
@@ -563,234 +839,281 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
     }
   };
 
-  const resolveTurn = useCallback(() => {
-    // Enemy AI (Random)
-    const enemyTargets: number[] = [];
-    const enemyShields: number[] = [];
+  const resolveTurn = useCallback(async () => {
+    // If no matchId, use old AI logic for free play
+    if (!matchId) {
+      // Enemy AI (Random)
+      const enemyTargets: number[] = [];
+      const enemyShields: number[] = [];
 
-    // Enemy picks 3 UNIQUE targets
-    while(enemyTargets.length < 3) {
-       const t = Math.floor(Math.random() * 5);
-       if (!enemyTargets.includes(t)) {
-          enemyTargets.push(t);
-       }
+      // Enemy picks 3 UNIQUE targets
+      while(enemyTargets.length < 3) {
+         const t = Math.floor(Math.random() * 5);
+         if (!enemyTargets.includes(t)) {
+            enemyTargets.push(t);
+         }
+      }
+
+      // Enemy shields 2 unique bases
+      while(enemyShields.length < 2) {
+        const s = Math.floor(Math.random() * 5);
+        if(!enemyShields.includes(s)) enemyShields.push(s);
+      }
+
+      // Lock in moves & Start Animation
+      setGameState(prev => ({ ...prev, phase: GamePhase.RESOLVING }));
+      setMessage("LAUNCH DETECTED. MISSILES AWAY.");
+
+      // Show missiles immediately
+      setMissileTargets({ player: selectedTargets, enemy: enemyTargets });
+      setShowMissiles(true);
+      playMissilesSound(); // Play missiles launch sound
+
+      // After 1.5s: Impact + shake
+      setTimeout(() => {
+        setShake(true);
+        setMessage("IMPACT CONFIRMED. ANALYZING DAMAGE.");
+        playExplosionSound(); // Play explosion sound on impact
+        setTimeout(() => setShake(false), 200);
+
+        // Apply damage and calculate destructions
+        setGameState(current => {
+          const nextPlayer = { ...current.player1, bases: current.player1.bases.map(b => ({...b})) };
+          const nextEnemy = { ...current.player2, bases: current.player2.bases.map(b => ({...b})) };
+
+          // Track bases destroyed this turn for HP rewards
+          let playerBasesDestroyedThisTurn = 0;
+          let enemyBasesDestroyedThisTurn = 0;
+
+          // Capture the current destroyed count BEFORE applying damage (for animation indices)
+          const playerDestroyedBeforeTurn = current.player1.bases.filter(b => b.isDestroyed).length;
+          const enemyDestroyedBeforeTurn = current.player2.bases.filter(b => b.isDestroyed).length;
+
+          // Enemy Attacks Player
+          enemyTargets.forEach(targetId => {
+              const base = nextPlayer.bases[targetId];
+              if (base && !selectedDefenses.includes(targetId) && !base.isDestroyed) {
+                  base.hp -= 1;
+                  if (base.hp <= 0) {
+                      base.isDestroyed = true;
+                      base.hp = 0;
+                      nextPlayer.basesDestroyed += 1;
+                      nextPlayer.totalHP -= 2;
+                      enemyBasesDestroyedThisTurn += 1;
+                  } else {
+                      nextPlayer.totalHP -= 1;
+                  }
+              }
+          });
+
+          // Player Attacks Enemy
+          selectedTargets.forEach(targetId => {
+              const base = nextEnemy.bases[targetId];
+              if (base && !enemyShields.includes(targetId) && !base.isDestroyed) {
+                  base.hp -= 1;
+                  if (base.hp <= 0) {
+                      base.isDestroyed = true;
+                      base.hp = 0;
+                      nextEnemy.basesDestroyed += 1;
+                      nextEnemy.totalHP -= 2;
+                      playerBasesDestroyedThisTurn += 1;
+                  } else {
+                      nextEnemy.totalHP -= 1;
+                  }
+              }
+          });
+
+          // Award HP gifts for destroyed bases
+          nextPlayer.pendingHP += playerBasesDestroyedThisTurn;
+          nextEnemy.pendingHP += enemyBasesDestroyedThisTurn;
+
+          // Store destruction counts AND previous indices for notifications
+          setLastTurnDestructions({
+            player: enemyBasesDestroyedThisTurn,
+            enemy: playerBasesDestroyedThisTurn,
+            playerStartIndex: playerDestroyedBeforeTurn,
+            enemyStartIndex: enemyDestroyedBeforeTurn
+          });
+
+          return {
+              ...current,
+              player1: nextPlayer,
+              player2: nextEnemy,
+              phase: current.phase,
+              currentTurn: current.currentTurn,
+              turnTimeLeft: current.turnTimeLeft,
+              winner: null,
+              winReason: null,
+          };
+        });
+
+        setShowMissiles(false);
+
+        // Show destruction notifications if any and trigger animations
+        setTimeout(() => {
+          setShowDestructionCount(true);
+
+          // Use functional setState to get the latest lastTurnDestructions
+          setLastTurnDestructions(latest => {
+            // Clear any previous animations first
+            setHighlightedIcons({ player: [], enemy: [] });
+            setIconsShrinking({ player: [], enemy: [] });
+
+            // Calculate which boxes should be highlighted based on destructions THIS TURN
+            // latest.player = player bases destroyed by enemy -> highlight PLAYER's counter
+            // latest.enemy = enemy bases destroyed by player -> highlight ENEMY's counter
+            const playerHighlights = latest.player > 0
+              ? Array.from({ length: latest.player }, (_, i) => latest.playerStartIndex + i)
+              : [];
+            const enemyHighlights = latest.enemy > 0
+              ? Array.from({ length: latest.enemy }, (_, i) => latest.enemyStartIndex + i)
+              : [];
+
+            // Only trigger animations if there were actual destructions
+            if (playerHighlights.length > 0 || enemyHighlights.length > 0) {
+              // Phase 1: Start box pulse animation
+              setHighlightedIcons({ player: playerHighlights, enemy: enemyHighlights });
+
+              // Phase 2: After box pulse completes (1200ms = 400ms * 3), start icon shrink
+              setTimeout(() => {
+                setIconsShrinking({ player: playerHighlights, enemy: enemyHighlights });
+
+                // Clear icon shrink after animation completes (600ms)
+                setTimeout(() => {
+                  setIconsShrinking({ player: [], enemy: [] });
+                }, 600);
+              }, 1200);
+
+              // Clear box pulse highlights after animation completes (1200ms)
+              setTimeout(() => {
+                setHighlightedIcons({ player: [], enemy: [] });
+              }, 1200);
+            }
+
+            return latest; // Return unchanged state
+          });
+
+          // After 2s: Check win condition and transition
+          setTimeout(() => {
+            setShowDestructionCount(false);
+
+            setGameState(current => {
+              const pDestroyed = current.player1.bases.filter(b => b.isDestroyed).length;
+              const eDestroyed = current.player2.bases.filter(b => b.isDestroyed).length;
+
+              let nextPhase = GamePhase.PLANNING;
+              let winner: string | null = null;
+              let winReason: 'BASES_DESTROYED' | 'OPPONENT_FORFEIT' | 'TIE_HP' | 'TIE_COINFLIP' | null = null;
+
+              // Updated player objects with potential streak changes
+              let updatedPlayer1 = { ...current.player1 };
+              let updatedPlayer2 = { ...current.player2 };
+
+              if (pDestroyed >= 3 || eDestroyed >= 3) {
+                   nextPhase = GamePhase.GAME_OVER;
+                   if (eDestroyed >= 3 && pDestroyed < 3) {
+                      // Player 1 wins
+                      winner = current.player1.id;
+                      winReason = 'BASES_DESTROYED';
+                      updatedPlayer1.currentStreak += 1;
+                      updatedPlayer1.longestStreak = Math.max(updatedPlayer1.longestStreak, updatedPlayer1.currentStreak);
+                      updatedPlayer2.currentStreak = 0;
+                      updatedPlayer1.wins += 1;
+                      updatedPlayer2.losses += 1;
+                      updatedPlayer1.gamesPlayed += 1;
+                      updatedPlayer2.gamesPlayed += 1;
+
+                      // Update database with win/loss and balance changes (only for wagered matches)
+                      if (current.betAmount > 0) {
+                        updateGameResults(current.player1.id, current.player2.id, current.betAmount);
+                      }
+                   } else if (pDestroyed >= 3 && eDestroyed < 3) {
+                      // Player 2 wins
+                      winner = current.player2.id;
+                      winReason = 'BASES_DESTROYED';
+                      updatedPlayer1.currentStreak = 0;
+                      updatedPlayer2.currentStreak += 1;
+                      updatedPlayer2.longestStreak = Math.max(updatedPlayer2.longestStreak, updatedPlayer2.currentStreak);
+                      updatedPlayer1.losses += 1;
+                      updatedPlayer2.wins += 1;
+                      updatedPlayer1.gamesPlayed += 1;
+                      updatedPlayer2.gamesPlayed += 1;
+
+                      // Update database with win/loss and balance changes (only for wagered matches)
+                      if (current.betAmount > 0) {
+                        updateGameResults(current.player2.id, current.player1.id, current.betAmount);
+                      }
+                   } else {
+                      // Tie
+                      winner = 'TIE';
+                      winReason = 'TIE_HP';
+                      updatedPlayer1.currentStreak = 0;
+                      updatedPlayer2.currentStreak = 0;
+
+                      // No balance updates for ties
+                   }
+              }
+
+              return {
+                  ...current,
+                  player1: updatedPlayer1,
+                  player2: updatedPlayer2,
+                  phase: nextPhase,
+                  currentTurn: current.currentTurn + 1,
+                  turnTimeLeft: 10000,
+                  winner,
+                  winReason,
+              };
+            });
+          }, 2000);
+        }, 200);
+      }, 1500); // Close the 1.5s setTimeout
+
+      return; // Exit early for free play
     }
 
-    // Enemy shields 2 unique bases
-    while(enemyShields.length < 2) {
-      const s = Math.floor(Math.random() * 5);
-      if(!enemyShields.includes(s)) enemyShields.push(s);
-    }
+    // MULTIPLAYER MODE: Submit turn to backend
+    try {
+      console.log(`🎯 Submitting turn for match ${matchId}`);
+      setMessage("TRANSMITTING STRIKE COORDINATES...");
+      setGameState(prev => ({ ...prev, phase: GamePhase.RESOLVING }));
 
-    // Lock in moves & Start Animation
-    setGameState(prev => ({ ...prev, phase: GamePhase.RESOLVING }));
-    setMessage("LAUNCH DETECTED. MISSILES AWAY.");
+      // Store moves for later animation
+      setSubmittedMoves({ defenses: selectedDefenses, attacks: selectedTargets });
 
-    // Show missiles immediately
-    setMissileTargets({ player: selectedTargets, enemy: enemyTargets });
-    setShowMissiles(true);
-    playMissilesSound(); // Play missiles launch sound
-
-    // After 1.5s: Impact + shake
-    setTimeout(() => {
-      setShake(true);
-      setMessage("IMPACT CONFIRMED. ANALYZING DAMAGE.");
-      playExplosionSound(); // Play explosion sound on impact
-      setTimeout(() => setShake(false), 200);
-
-      // Apply damage and calculate destructions
-      setGameState(current => {
-        const nextPlayer = { ...current.player1, bases: current.player1.bases.map(b => ({...b})) };
-        const nextEnemy = { ...current.player2, bases: current.player2.bases.map(b => ({...b})) };
-
-        // Track bases destroyed this turn for HP rewards
-        let playerBasesDestroyedThisTurn = 0;
-        let enemyBasesDestroyedThisTurn = 0;
-
-        // Capture the current destroyed count BEFORE applying damage (for animation indices)
-        const playerDestroyedBeforeTurn = current.player1.bases.filter(b => b.isDestroyed).length;
-        const enemyDestroyedBeforeTurn = current.player2.bases.filter(b => b.isDestroyed).length;
-
-        // Enemy Attacks Player
-        enemyTargets.forEach(targetId => {
-            const base = nextPlayer.bases[targetId];
-            if (base && !selectedDefenses.includes(targetId) && !base.isDestroyed) {
-                base.hp -= 1;
-                if (base.hp <= 0) {
-                    base.isDestroyed = true;
-                    base.hp = 0;
-                    nextPlayer.basesDestroyed += 1;
-                    nextPlayer.totalHP -= 2;
-                    enemyBasesDestroyedThisTurn += 1;
-                } else {
-                    nextPlayer.totalHP -= 1;
-                }
-            }
-        });
-
-        // Player Attacks Enemy
-        selectedTargets.forEach(targetId => {
-            const base = nextEnemy.bases[targetId];
-            if (base && !enemyShields.includes(targetId) && !base.isDestroyed) {
-                base.hp -= 1;
-                if (base.hp <= 0) {
-                    base.isDestroyed = true;
-                    base.hp = 0;
-                    nextEnemy.basesDestroyed += 1;
-                    nextEnemy.totalHP -= 2;
-                    playerBasesDestroyedThisTurn += 1;
-                } else {
-                    nextEnemy.totalHP -= 1;
-                }
-            }
-        });
-
-        // Award HP gifts for destroyed bases
-        nextPlayer.pendingHP += playerBasesDestroyedThisTurn;
-        nextEnemy.pendingHP += enemyBasesDestroyedThisTurn;
-
-        // Store destruction counts AND previous indices for notifications
-        setLastTurnDestructions({
-          player: enemyBasesDestroyedThisTurn,
-          enemy: playerBasesDestroyedThisTurn,
-          playerStartIndex: playerDestroyedBeforeTurn,
-          enemyStartIndex: enemyDestroyedBeforeTurn
-        });
-
-        return {
-            ...current,
-            player1: nextPlayer,
-            player2: nextEnemy,
-            phase: current.phase,
-            currentTurn: current.currentTurn,
-            turnTimeLeft: current.turnTimeLeft,
-            winner: null,
-            winReason: null,
-        };
+      const response = await fetch('http://localhost:3003/api/game/submit-turn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchId,
+          playerId: player.id,
+          defenses: selectedDefenses,
+          attacks: selectedTargets
+        })
       });
 
-      setShowMissiles(false);
+      const data = await response.json();
 
-      // Show destruction notifications if any and trigger animations
+      if (data.status === 'waiting') {
+        // Waiting for opponent
+        console.log('⏳ Waiting for opponent to submit turn...');
+        setMessage("AWAITING ENEMY RESPONSE...");
+        setWaitingForOpponent(true);
+      } else if (data.turnResolved) {
+        // Turn resolved immediately (both players submitted)
+        console.log('✅ Turn resolved immediately! Fetching game state...');
+        setMessage("AWAITING ENEMY RESPONSE...");
+        setWaitingForOpponent(true); // Trigger polling to fetch resolved state
+      }
+    } catch (error) {
+      console.error('❌ Error submitting turn:', error);
+      setMessage("TRANSMISSION ERROR. RETRYING...");
+      // Revert to planning phase
       setTimeout(() => {
-        setShowDestructionCount(true);
-
-        // Use functional setState to get the latest lastTurnDestructions
-        setLastTurnDestructions(latest => {
-          // Clear any previous animations first
-          setHighlightedIcons({ player: [], enemy: [] });
-          setIconsShrinking({ player: [], enemy: [] });
-
-          // Calculate which boxes should be highlighted based on destructions THIS TURN
-          // latest.player = player bases destroyed by enemy -> highlight PLAYER's counter
-          // latest.enemy = enemy bases destroyed by player -> highlight ENEMY's counter
-          const playerHighlights = latest.player > 0
-            ? Array.from({ length: latest.player }, (_, i) => latest.playerStartIndex + i)
-            : [];
-          const enemyHighlights = latest.enemy > 0
-            ? Array.from({ length: latest.enemy }, (_, i) => latest.enemyStartIndex + i)
-            : [];
-
-          // Only trigger animations if there were actual destructions
-          if (playerHighlights.length > 0 || enemyHighlights.length > 0) {
-            // Phase 1: Start box pulse animation
-            setHighlightedIcons({ player: playerHighlights, enemy: enemyHighlights });
-
-            // Phase 2: After box pulse completes (1200ms = 400ms * 3), start icon shrink
-            setTimeout(() => {
-              setIconsShrinking({ player: playerHighlights, enemy: enemyHighlights });
-
-              // Clear icon shrink after animation completes (600ms)
-              setTimeout(() => {
-                setIconsShrinking({ player: [], enemy: [] });
-              }, 600);
-            }, 1200);
-
-            // Clear box pulse highlights after animation completes (1200ms)
-            setTimeout(() => {
-              setHighlightedIcons({ player: [], enemy: [] });
-            }, 1200);
-          }
-
-          return latest; // Return unchanged state
-        });
-
-        // After 2s: Check win condition and transition
-        setTimeout(() => {
-          setShowDestructionCount(false);
-
-          setGameState(current => {
-            const pDestroyed = current.player1.bases.filter(b => b.isDestroyed).length;
-            const eDestroyed = current.player2.bases.filter(b => b.isDestroyed).length;
-
-            let nextPhase = GamePhase.PLANNING;
-            let winner: string | null = null;
-            let winReason: 'BASES_DESTROYED' | 'OPPONENT_FORFEIT' | 'TIE_HP' | 'TIE_COINFLIP' | null = null;
-
-            // Updated player objects with potential streak changes
-            let updatedPlayer1 = { ...current.player1 };
-            let updatedPlayer2 = { ...current.player2 };
-
-            if (pDestroyed >= 3 || eDestroyed >= 3) {
-                 nextPhase = GamePhase.GAME_OVER;
-                 if (eDestroyed >= 3 && pDestroyed < 3) {
-                    // Player 1 wins
-                    winner = current.player1.id;
-                    winReason = 'BASES_DESTROYED';
-                    updatedPlayer1.currentStreak += 1;
-                    updatedPlayer1.longestStreak = Math.max(updatedPlayer1.longestStreak, updatedPlayer1.currentStreak);
-                    updatedPlayer2.currentStreak = 0;
-                    updatedPlayer1.wins += 1;
-                    updatedPlayer2.losses += 1;
-                    updatedPlayer1.gamesPlayed += 1;
-                    updatedPlayer2.gamesPlayed += 1;
-
-                    // Update database with win/loss and balance changes (only for wagered matches)
-                    if (current.betAmount > 0) {
-                      updateGameResults(current.player1.id, current.player2.id, current.betAmount);
-                    }
-                 } else if (pDestroyed >= 3 && eDestroyed < 3) {
-                    // Player 2 wins
-                    winner = current.player2.id;
-                    winReason = 'BASES_DESTROYED';
-                    updatedPlayer1.currentStreak = 0;
-                    updatedPlayer2.currentStreak += 1;
-                    updatedPlayer2.longestStreak = Math.max(updatedPlayer2.longestStreak, updatedPlayer2.currentStreak);
-                    updatedPlayer1.losses += 1;
-                    updatedPlayer2.wins += 1;
-                    updatedPlayer1.gamesPlayed += 1;
-                    updatedPlayer2.gamesPlayed += 1;
-
-                    // Update database with win/loss and balance changes (only for wagered matches)
-                    if (current.betAmount > 0) {
-                      updateGameResults(current.player2.id, current.player1.id, current.betAmount);
-                    }
-                 } else {
-                    // Tie
-                    winner = 'TIE';
-                    winReason = 'TIE_HP';
-                    updatedPlayer1.currentStreak = 0;
-                    updatedPlayer2.currentStreak = 0;
-
-                    // No balance updates for ties
-                 }
-            }
-
-            return {
-                ...current,
-                player1: updatedPlayer1,
-                player2: updatedPlayer2,
-                phase: nextPhase,
-                currentTurn: current.currentTurn + 1,
-                turnTimeLeft: 10000,
-                winner,
-                winReason,
-            };
-          });
-        }, 2000);
-      }, 200);
-    }, 1500); // Close the 1.5s setTimeout
-  }, [selectedDefenses, selectedTargets, setGameState, playMissilesSound, playExplosionSound]); // Close the useCallback
+        setGameState(prev => ({ ...prev, phase: GamePhase.PLANNING, turnTimeLeft: 10000 }));
+      }, 2000);
+    }
+  }, [matchId, selectedDefenses, selectedTargets, player.id, setGameState, playMissilesSound, playExplosionSound]);
 
   const timeSec = Math.floor(gameState.turnTimeLeft / 1000);
   const timeMs = Math.floor((gameState.turnTimeLeft % 1000) / 10);
@@ -924,7 +1247,7 @@ export default function BattleScreen({ gameState, setGameState }: BattleScreenPr
 
              {!isFreeMatch && (
                <div className="text-3xl mb-8 font-bold font-mono">
-                   {isDraw ? '0 SOL' : isWin ? `+${(gameState.betAmount * 1.9).toFixed(1)} SOL` : `-${gameState.betAmount.toFixed(1)} SOL`}
+                   {isDraw ? '0 SOL' : isWin ? `+${(gameState.betAmount * 1.9).toFixed(3)} SOL` : `-${gameState.betAmount.toFixed(3)} SOL`}
                </div>
              )}
              <div className="flex gap-8 mb-8">

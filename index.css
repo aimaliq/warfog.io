@@ -383,3 +383,20 @@ button.wallet-adapter-button[aria-expanded] {
   animation: conflict-pulse 1.5s ease-in-out infinite;
   animation-delay: 800ms;
 }
+
+/* Subtle shake for table notifications */
+@keyframes shake {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translate(-3px, 0);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translate(3px, 0);
+  }
+}
+
+.animate-shake {
+  animation: shake 500ms ease-in-out;
+}

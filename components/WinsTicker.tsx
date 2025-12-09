@@ -67,7 +67,7 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
         <span className="text-yellow-400 text-lg">{emojis.left}</span>
         <span className="text-white">{currentWin.winnerWallet}</span>
         <span className="text-purple-400">just won</span>
-        <span className="text-lime-400 font-black">{currentWin.amount.toFixed(1)} SOL</span>
+        <span className="text-lime-400 font-black">{currentWin.amount.toFixed(2)} SOL</span>
         <span className="text-yellow-400 text-lg">{emojis.right}</span>
       </div>
 

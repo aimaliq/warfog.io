@@ -106,11 +106,11 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                       <FlagIcon countryCode={entry.countryFlag} width="24px" height="18px" className="sm:w-[40px] sm:h-[28px]" />
                     </div>
                     <div className="col-span-4 pl-2">
-                      <div className="text-lime-400 font-bold text-[14px] sm:text-base truncate font-mono tracking-wide">
-                        {isCurrentPlayer && <span className="text-lime-500 mr-1">▸</span>}
+                      <div className="text-yellow-500 font-bold text-[14px] sm:text-base truncate font-mono tracking-wide">
+                        {isCurrentPlayer && <span className="text-yellow-500 mr-1">▸</span>}
                         {walletDisplay}
                       </div>
-                      <div className="text-[11px] sm:text-[12px] text-gray-500 font-mono truncate tracking-wider">
+                      <div className="text-[11px] sm:text-[12px] text-lime-500 font-mono truncate tracking-wider">
                         {entry.username}
                       </div>
                     </div>

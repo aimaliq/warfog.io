@@ -15,30 +15,39 @@ export const useRecentWins = () => {
   useEffect(() => {
     const fetchRecentWins = async () => {
       try {
-        // TODO: Query actual matches table when implemented
-        // For now, generate mock data
-        const mockWins: RecentWin[] = [
-          {
-            id: '1',
-            winnerWallet: 'Fu8s...JsH',
-            amount: 0.5,
-            timestamp: Date.now() - 30000,
-          },
-          {
-            id: '2',
-            winnerWallet: '9KpL...mN2',
-            amount: 1.0,
-            timestamp: Date.now() - 60000,
-          },
-          {
-            id: '3',
-            winnerWallet: 'Abc4...Xyz',
-            amount: 0.1,
-            timestamp: Date.now() - 90000,
-          },
-        ];
+        // Query wagered matches only (wager_amount > 0)
+        const { data: matches, error } = await supabase
+          .from('matches')
+          .select(`
+            id,
+            winner_id,
+            wager_amount,
+            completed_at,
+            winner:players!matches_winner_id_fkey(wallet_address)
+          `)
+          .gt('wager_amount', 0)
+          .eq('status', 'completed')
+          .not('winner_id', 'is', null)
+          .order('completed_at', { ascending: false })
+          .limit(20);
 
-        setWins(mockWins);
+        if (error) throw error;
+
+        const formattedWins: RecentWin[] = matches?.map(match => {
+          const wallet = match.winner?.wallet_address || 'Unknown';
+          const formatted = wallet.length > 8
+            ? `${wallet.slice(0, 4)}...${wallet.slice(-3)}`
+            : wallet;
+
+          return {
+            id: match.id,
+            winnerWallet: formatted,
+            amount: match.wager_amount,
+            timestamp: new Date(match.completed_at).getTime()
+          };
+        }) || [];
+
+        setWins(formattedWins);
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching recent wins:', error);
