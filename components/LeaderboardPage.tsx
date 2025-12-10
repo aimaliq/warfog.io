@@ -72,7 +72,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
               leaderboard.map((entry) => {
                 const isCurrentPlayer = entry.wallet === player.walletAddress;
                 const walletDisplay = entry.wallet
-                  ? `${entry.wallet.slice(0, 4)}...${entry.wallet.slice(-4)}`
+                  ? `${entry.wallet.slice(0, 4)}..${entry.wallet.slice(-4)}`
                   : 'Anonymous';
 
                 const isTopThree = entry.rank <= 3;
@@ -106,7 +106,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                       <FlagIcon countryCode={entry.countryFlag} width="24px" height="18px" className="sm:w-[40px] sm:h-[28px]" />
                     </div>
                     <div className="col-span-4 pl-2">
-                      <div className="text-yellow-500 font-bold text-[14px] sm:text-base truncate font-mono tracking-wide">
+                      <div className="text-white text-[14px] sm:text-base truncate font-mono tracking-wide">
                         {isCurrentPlayer && <span className="text-yellow-500 mr-1">▸</span>}
                         {walletDisplay}
                       </div>
@@ -149,12 +149,11 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
             {/* Update Message */}
             <div className="flex items-center gap-2 text-lime-500">
               <div className="w-2 h-2 bg-lime-500 rounded-full animate-pulse"></div>
-              <span>Table updates every 60 sec</span>
+              <span>Follow on</span>
             </div>
 
              {/* Social Icons */}
             <div className="flex items-center gap-3 text-lime-500">
-              <span>-</span>
               <a
                 href="https://x.com/warfog_io"
                 target="_blank"

@@ -286,7 +286,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 <div className="flex items-start gap-2">
                   <div>
                     <p className="text-sm text-lime-500/90 text-center leading-relaxed">
-                      In this game you can't see the enemy HP or which nuclear silos they are defending. This concept is referred to as FOG OF WAR. You must predict, adapt, and outthink your opponent!
+                      In this game you can't see the enemy HP or which nuclear silos they are defending. This concept is known as FOG OF WAR. You must predict, adapt, and outthink your opponent!
                     </p>
                   </div>
                 </div>
@@ -400,7 +400,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
-                {isLoading ? '0' : onlineCount} Online
+                {isLoading ? '0' : onlineCount} Online players
               </span>
             </div>
           </div>
@@ -513,46 +513,44 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
             <h2 className="text-lime-500 font-bold text-md tracking-widest">LATEST WINS</h2>
           </div>
-          <div className="p-4">
+          <div className="p-2 space-y-2">
             {wins.length > 0 ? (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-700/30">
-                    <th className="text-left px-3 py-2 text-gray-500 text-md uppercase tracking-wider">WINNER</th>
-                    <th className="text-center px-3 py-2 text-gray-500 text-md uppercase tracking-wider">SOL</th>
-                    <th className="text-right px-3 py-2 text-gray-500 text-md uppercase tracking-wider">DATE</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700/30">
-                  {wins.slice(0, 10).map((win) => {
-                    const timeAgo = Math.floor((Date.now() - win.timestamp) / 1000);
-                    let timeDisplay = '';
-                    if (timeAgo < 60) {
-                      timeDisplay = `${timeAgo}s ago`;
-                    } else if (timeAgo < 3600) {
-                      timeDisplay = `${Math.floor(timeAgo / 60)}m ago`;
-                    } else if (timeAgo < 86400) {
-                      timeDisplay = `${Math.floor(timeAgo / 3600)}h ago`;
-                    } else {
-                      timeDisplay = `${Math.floor(timeAgo / 86400)}d ago`;
-                    }
+              wins.slice(0, 10).map((win, index) => {
+                const timeAgo = Math.floor((Date.now() - win.timestamp) / 1000);
+                let timeDisplay = '';
+                if (timeAgo < 60) {
+                  timeDisplay = `${timeAgo}s ago`;
+                } else if (timeAgo < 3600) {
+                  timeDisplay = `${Math.floor(timeAgo / 60)}m ago`;
+                } else if (timeAgo < 86400) {
+                  timeDisplay = `${Math.floor(timeAgo / 3600)}h ago`;
+                } else {
+                  timeDisplay = `${Math.floor(timeAgo / 86400)}d ago`;
+                }
 
-                    return (
-                      <tr key={win.id} className="hover:bg-gray-900/10 transition-all">
-                        <td className="px-3 py-2">
-                          <span className="text-yellow-500 font-mono text-sm">{win.winnerWallet}</span>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <span className="text-lime-500 font-bold text-sm">+ {win.amount.toFixed(2)}</span>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <span className="text-gray-600 text-sm">{timeDisplay}</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                // Emoji pairs rotating through different combinations
+                const emojiPairs = [
+                  { left: '🔥', right: '💰' },
+                  { left: '💵', right: '💸' },
+                  { left: '🚀', right: '💎' },
+                  { left: '🎯', right: '🏆' },
+                  { left: '💰', right: '💵' },
+                ];
+                const emojis = emojiPairs[index % emojiPairs.length];
+
+                return (
+                  <div
+                    key={win.id}
+                    className="flex items-center justify-center gap-2 py-2 px-3 hover:bg-gray-900/20 transition-all text-sm font-bold border-b border-gray-700/20 last:border-b-0"
+                  >
+                    <span className="text-yellow-400 text-lg">{emojis.left}</span>
+                    <span className="text-white">{win.winnerWallet}</span>
+                    <span className="text-purple-400">just won</span>
+                    <span className="text-lime-400 font-black">{win.amount.toFixed(2)} SOL</span>
+                    <span className="text-gray-500 text-sm ml-2">{timeDisplay}</span>
+                  </div>
+                );
+              })
             ) : (
               <div className="text-center py-8 text-gray-600 text-sm">No wins yet</div>
             )}

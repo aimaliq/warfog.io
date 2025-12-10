@@ -359,7 +359,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
               <FlagIcon countryCode={currentCountry} width="96px" height="72px" />
             </button>
             <div className="flex-1">
-              <div className="text-yellow-500 font-black text-3xl">
+              <div className="text-white font-black text-3xl">
                 {connected && publicKey
                   ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
                   : 'GUEST_MODE'}
