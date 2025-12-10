@@ -125,7 +125,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                     </div>
                     <div className="col-span-3 flex items-center justify-center">
                       <div className="inline-block bg-black/50 px-2 sm:px-3 py-1 border border-lime-700/50 shadow-[0_0_10px_rgba(0,255,0,0.1)]">
-                        <span className="text-lime-400 font-bold font-mono text-[12px] sm:text-base tracking-wider">
+                        <span className="text-lime-400 font-bold font-mono text-[14px] sm:text-base tracking-wider">
                           {entry.gameBalance.toFixed(2)}
                         </span>
                       </div>
@@ -149,7 +149,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
             {/* Update Message */}
             <div className="flex items-center gap-2 text-lime-500">
               <div className="w-2 h-2 bg-lime-500 rounded-full animate-pulse"></div>
-              <span>Follow on</span>
+              <span>Follow on </span>
             </div>
 
              {/* Social Icons */}

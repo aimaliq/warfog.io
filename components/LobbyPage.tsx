@@ -282,11 +282,11 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           {isHowToPlayOpen && (
             <div className="px-4 pb-4 pt-2 border-t border-lime-900/30 space-y-4 animate-fadeIn">
               {/* Fog of War Note */}
-              <div className="mb-4 pt-4 bg-yellow-900/25 border border-yellow-900/100 p-3">
+              <div className="mb-6 pt-4 bg-yellow-900/25 border border-yellow-900/100 p-3">
                 <div className="flex items-start gap-2">
                   <div>
-                    <p className="text-sm text-lime-500/90 text-center leading-relaxed">
-                      In this game you can't see the enemy HP or which nuclear silos they are defending. This concept is known as FOG OF WAR. You must predict, adapt, and outthink your opponent!
+                    <p className="text-xs text-white text-center leading-relaxed">
+                      In this game you can't see the enemy HP or which nuclear silos they are defending. <br></br>This concept is known as <span className="text-lime-500 font-black text-sm">FOG OF WAR</span>. <br></br>You must predict, adapt, and outthink your opponent!
                     </p>
                   </div>
                 </div>
@@ -441,9 +441,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 <button
                   onClick={() => handleJoinQueue(selectedBet)}
                   disabled={!connected || gameBalance < selectedBet || isInBattle || queueStatus === 'queued'}
-                  className="w-full sm:w-auto px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all text-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
+                  className="w-full sm:w-auto px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 text-xl font-bold hover:bg-lime-900/60 transition-all text-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
                 >
-                  JOIN SOL MATCH
+                  JOIN SOL BATTLE
                 </button>
               </div>
 
@@ -472,18 +472,14 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 <div className="text-center space-y-3">
                   {/* Rotating Nuclear Icon */}
                   <div
-                    className="inline-block text-5xl transition-transform duration-200"
+                    className="inline-block text-5xl transition-transform duration-500"
                     style={{ transform: `rotate(${rotationAngle}deg)` }}
                   >
                     ☢
                   </div>
 
-                  <div className="text-lime-400 font-bold text-lg animate-pulse">
+                  <div className="text-lime-400 font-bold text-sm animate-pulse">
                     Searching for an opponent...
-                  </div>
-
-                  <div className="text-gray-400 text-sm">
-                    Bet: <span className="text-lime-500 font-bold">{searchingWager.toFixed(2)} SOL</span>
                   </div>
 
                   {/* Queue Count Display */}
