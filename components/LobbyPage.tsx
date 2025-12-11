@@ -400,7 +400,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
-                {isLoading ? '0' : onlineCount} Online players
+                {isLoading ? '0' : onlineCount} Players online
               </span>
             </div>
           </div>
@@ -499,7 +499,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="text-center text-gray-600 text-sm py-2">Select a bet to join matchmaking</div>
+              <div className="text-center text-gray-600 text-xs py-2">Select a bet to join matchmaking</div>
             )}
           </div>
         </div>
@@ -541,9 +541,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   >
                     <span className="text-yellow-400 text-lg">{emojis.left}</span>
                     <span className="text-white">{win.winnerWallet}</span>
-                    <span className="text-purple-400">just won</span>
+                    <span className="text-purple-400 text-xs">just won</span>
                     <span className="text-lime-400 font-black">{win.amount.toFixed(2)} SOL</span>
-                    <span className="text-gray-500 text-sm ml-2">{timeDisplay}</span>
+                    <span className="text-gray-500 text-xs ml-1">{timeDisplay}</span>
                   </div>
                 );
               })
