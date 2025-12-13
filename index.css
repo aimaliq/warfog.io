@@ -36,6 +36,66 @@
   cursor: not-allowed;
 }
 
+/* Yellow wallet button styling (applied to both Lobby and Profile) */
+.wallet-custom .wallet-adapter-button {
+  width: 100%;
+  border-color: #fbbf24;
+  color: #fbbf24;
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.3);
+  background-color: rgba(120, 53, 15, 0.3);
+  padding: 0.5rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.wallet-custom .wallet-adapter-button:hover:not([disabled]) {
+  background-color: rgba(120, 53, 15, 0.5);
+  box-shadow: 0 0 25px rgba(251, 191, 36, 0.5);
+  border-color: #fcd34d;
+}
+
+/* Customize wallet button text - Change "Select Wallet" to "Connect" */
+.wallet-custom .wallet-adapter-button {
+  font-size: 0 !important; /* Hide default text */
+}
+
+.wallet-custom .wallet-adapter-button::after {
+  content: 'Connect';
+  font-size: 14px !important;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+/* When connected, show wallet address instead */
+.wallet-custom .wallet-adapter-button[aria-label]:not([aria-label=""])::after {
+  content: attr(aria-label);
+  font-size: 14px !important;
+  color: #fbbf24;
+}
+
+/* Make wallet icon visible and properly sized */
+.wallet-custom .wallet-adapter-button-start-icon {
+  font-size: 20px !important;
+  width: 20px !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0 !important;
+}
+
+.wallet-custom .wallet-adapter-button-start-icon svg,
+.wallet-custom .wallet-adapter-button-start-icon img {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.wallet-custom .wallet-adapter-button-end-icon {
+  font-size: 16px !important;
+}
+
 /* Button content alignment */
 .wallet-adapter-button-start-icon,
 .wallet-adapter-button-end-icon {

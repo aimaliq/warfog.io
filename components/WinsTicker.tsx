@@ -23,7 +23,7 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
 
   if (wins.length === 0) {
     return (
-      <div className="relative bg-gradient-to-r from-purple-900/20 via-pink-900/20 to-purple-900/20 border border-purple-500/30 px-4 py-2.5 mb-6">
+      <div className="relative bg-gradient-to-r from-purple-900/20 via-pink-900/20 to-purple-900/20 border border-purple-500/30 px-4 py-2.5">
         <div className="flex items-center justify-center gap-2 text-purple-400/50 font-bold text-xs">
           <span className="animate-pulse">💎</span>
           <span>Waiting for wins...</span>
@@ -34,6 +34,19 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
   }
 
   const currentWin = wins[currentIndex];
+
+  // Calculate time ago
+  const timeAgo = Math.floor((Date.now() - currentWin.timestamp) / 1000);
+  let timeDisplay = '';
+  if (timeAgo < 60) {
+    timeDisplay = `${timeAgo}s ago`;
+  } else if (timeAgo < 3600) {
+    timeDisplay = `${Math.floor(timeAgo / 60)}m ago`;
+  } else if (timeAgo < 86400) {
+    timeDisplay = `${Math.floor(timeAgo / 3600)}h ago`;
+  } else {
+    timeDisplay = `${Math.floor(timeAgo / 86400)}d ago`;
+  }
 
   // Color gradients array
   const gradients = [
@@ -56,7 +69,7 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
   const emojis = emojiPairs[currentIndex % emojiPairs.length];
 
   return (
-    <div className={`relative bg-gradient-to-r ${colorScheme.bg} border-2 ${colorScheme.border} px-4 py-2.5 mb-6 overflow-hidden transition-all duration-200 ${
+    <div className={`relative bg-gradient-to-r ${colorScheme.bg} border-2 ${colorScheme.border} px-4 py-2.5 overflow-hidden transition-all duration-200 ${
       isShaking ? 'animate-shake' : ''
     }`}>
       {/* Animated gradient background */}
@@ -66,9 +79,9 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
       <div className="relative flex items-center justify-center gap-2 text-sm font-bold">
         <span className="text-yellow-400 text-lg">{emojis.left}</span>
         <span className="text-white">{currentWin.winnerWallet}</span>
-        <span className="text-purple-400">just won</span>
+        <span className="text-purple-400 text-xs">just won</span>
         <span className="text-lime-400 font-black">{currentWin.amount.toFixed(2)} SOL</span>
-        <span className="text-yellow-400 text-lg">{emojis.right}</span>
+        <span className="text-gray-500 text-xs ml-1">{timeDisplay}</span>
       </div>
 
       <style>{`

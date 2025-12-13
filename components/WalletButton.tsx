@@ -1,8 +1,14 @@
 import React from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
-export const WalletButton: React.FC = () => {
+interface WalletButtonProps {
+  className?: string;
+}
+
+export const WalletButton: React.FC<WalletButtonProps> = ({ className }) => {
   return (
-    <WalletMultiButton />
+    <div className={className}>
+      <WalletMultiButton />
+    </div>
   );
 };

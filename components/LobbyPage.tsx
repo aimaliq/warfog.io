@@ -255,19 +255,14 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
       <div className="w-full max-w-2xl">
 
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-black mb-2 text-lime-500 animate-pulse">WARFOG.IO</h1>
-          <p className="text-md text-gray-400 mb-6">Strategic Defense Game</p>
-          <div className="flex justify-center">
-            <WalletButton />
-          </div>
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="text-4xl font-black text-lime-500 animate-pulse">WARFOG.IO</h1>
+          <WalletButton className="wallet-custom" />
         </div>
-        
-        {/* Recent Wins Ticker */}
-        <WinsTicker wins={wins} />
+      
 
         {/* How to Play Section */}
-        <div className="bg-black/60 border-2 border-lime-900 mb-6">
+        <div className="bg-black/60 mb-6">
           <button
             onClick={() => setIsHowToPlayOpen(!isHowToPlayOpen)}
             className="w-full px-4 py-3 flex items-center justify-center gap-2 hover:bg-lime-900/10 transition-all relative"
@@ -281,16 +276,6 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
           {isHowToPlayOpen && (
             <div className="px-4 pb-4 pt-2 border-t border-lime-900/30 space-y-4 animate-fadeIn">
-              {/* Fog of War Note */}
-              <div className="mb-6 pt-4 bg-yellow-900/25 border border-yellow-900/100 p-3">
-                <div className="flex items-start gap-2">
-                  <div>
-                    <p className="text-xs text-white text-center leading-relaxed">
-                      In this game you can't see the enemy HP or which nuclear silos they are defending. <br></br>This concept is known as <span className="text-lime-500 font-black text-sm">FOG OF WAR</span>. <br></br>You must predict, adapt, and outthink your opponent!
-                    </p>
-                  </div>
-                </div>
-              </div>
                             
               {/* Step 1 */}
               <div className="flex gap-3">
@@ -384,7 +369,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           <button
             onClick={() => onStartBattle()}
             disabled={isInBattle}
-            className="w-full py-6 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-2xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
+            className="w-full py-4 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
           >
             JOIN FREE BATTLE
           </button>
@@ -394,13 +379,13 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
         </div>
 
         {/* Live Operations Table */}
-        <div className="bg-black/60 border-2 border-lime-900">
+        <div className="bg-black/60 mt-10">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10 flex justify-between items-center">
             <h2 className="text-lime-500 font-bold text-md tracking-widest">SOL BATTLES</h2>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
-                {isLoading ? '0' : onlineCount} Players online
+                {isLoading ? '0' : onlineCount} Playing
               </span>
             </div>
           </div>
@@ -449,7 +434,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
               {!connected && (
                 <div className="text-center text-xs text-yellow-600">
-                  Connect wallet to join matchmaking
+                  Connect wallet to win SOL
                 </div>
               )}
 
@@ -505,10 +490,14 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
         </div>
 
         {/* Latest Wins Table */}
-        <div className={`mt-6 bg-black/60 border-2 border-lime-900 transition-transform ${isWinsShaking ? 'animate-shake' : ''}`}>
+        <div className={`mt-6 bg-black/60 transition-transform ${isWinsShaking ? 'animate-shake' : ''}`}>
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
             <h2 className="text-lime-500 font-bold text-md tracking-widest">LATEST WINS</h2>
           </div>
+          
+        {/* Recent Wins Ticker */}
+        <WinsTicker wins={wins} />
+
           <div className="p-2 space-y-2">
             {wins.length > 0 ? (
               wins.slice(0, 10).map((win, index) => {

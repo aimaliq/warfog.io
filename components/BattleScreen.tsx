@@ -33,7 +33,7 @@ const updateGameResults = async (
     // Get current balances first
     const { data: winnerData } = await supabase
       .from('players')
-      .select('total_wins, game_balance')
+      .select('total_wins, game_balance, total_sol_won')
       .eq('id', winnerId)
       .single();
 
@@ -49,7 +49,8 @@ const updateGameResults = async (
         .from('players')
         .update({
           total_wins: (winnerData.total_wins || 0) + 1,
-          game_balance: (winnerData.game_balance || 0) + winnerGain
+          game_balance: (winnerData.game_balance || 0) + winnerGain,
+          total_sol_won: (winnerData.total_sol_won || 0) + winnerGain
         })
         .eq('id', winnerId);
     }

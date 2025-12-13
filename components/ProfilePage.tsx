@@ -353,7 +353,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         <h1 className="text-3xl font-black text-lime-500 mb-8">COMMANDER PROFILE</h1>
 
         {/* Profile Card */}
-        <div className="bg-black/60 border-2 border-lime-900 p-6 mb-6">
+        <div className="bg-black/60 p-6 mb-6">
           <div className="flex items-center gap-6 mb-6">
             <button className="hover:scale-110 transition-transform">
               <FlagIcon countryCode={currentCountry} width="96px" height="72px" />
@@ -568,17 +568,19 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
             </div>
           )}
 
-          <div className="space-y-3">
-            <WalletMultiButton />
+          <div className="flex gap-3">
             <button
               onClick={() => setIsEditOpen(!isEditOpen)}
-              className="w-full py-3 border-2 border-lime-900 text-lime-500 font-bold hover:bg-lime-900/20 transition-all flex items-center justify-center gap-2"
+              className="flex-1 border-2 border-lime-900 text-lime-500 font-bold hover:bg-lime-900/20 transition-all flex items-center justify-center gap-2"
             >
-              <span className="material-icons-outlined text-lg">
+              <span className="material-icons-outlined text-sm">
                 {isEditOpen ? 'expand_less' : 'edit'}
               </span>
-              EDIT PROFILE
+              EDIT INFO
             </button>
+            <div className="wallet-custom flex-1">
+              <WalletMultiButton />
+            </div>
           </div>
 
           {/* Edit Profile Dropdown */}
@@ -652,34 +654,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-black/60 border-2 border-lime-900 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">TOTAL GAMES</div>
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">BATTLES</div>
             <div className="text-3xl text-lime-500 font-black font-mono">{player.gamesPlayed}</div>
           </div>
 
-          <div className="bg-black/60 border-2 border-lime-900 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">WIN RATE</div>
-            <div className="text-3xl text-lime-500 font-black font-mono">{winRate}%</div>
-          </div>
-
-          <div className="bg-black/60 border-2 border-lime-900 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">VICTORIES</div>
-            <div className="text-3xl text-lime-500 font-black font-mono">{player.wins}</div>
-          </div>
-
-          <div className="bg-black/60 border-2 border-lime-900 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">DEFEATS</div>
-            <div className="text-3xl text-red-500 font-black font-mono">{player.losses}</div>
-          </div>
-        </div>
-
-        {/* Current Rank & Longest Streak */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-black/60 border-2 border-lime-900 p-4">
-            <div className="text-[11px] text-gray-600 mb-2 tracking-widest">GLOBAL RANK</div>
+          <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-600 mb-2 tracking-widest">RANK</div>
             <div className="flex justify-between items-center">
-              <div className="text-4xl text-lime-500 font-black font-mono">
+              <div className="text-3xl text-lime-500 font-black font-mono">
                 {player.isGuest ? '—' : isLoadingRank ? '...' : globalRank ? `#${globalRank}` : '—'}
               </div>
             </div>
@@ -691,19 +675,34 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
             )}
           </div>
 
-          <div className="bg-black/60 border-2 border-lime-900 p-4">
+          <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">DEFEATS</div>
+            <div className="text-3xl text-orange-500 font-black font-mono">{player.losses}</div>
+          </div>
+
+          <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">WIN RATE</div>
+            <div className="text-3xl text-lime-500 font-black font-mono">{winRate}%</div>
+          </div>
+
+          <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">VICTORIES</div>
+            <div className="text-3xl text-lime-500 font-black font-mono">{player.wins}</div>
+          </div>
+
+          <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-600 mb-2 tracking-widest flex items-center gap-1">
               <span className="material-icons-outlined text-xs text-gray-600">local_fire_department</span>
-              LONGEST STREAK
+              STREAK
             </div>
-            <div className="text-4xl text-lime-500 font-black font-mono">
+            <div className="text-3xl text-lime-500 font-black font-mono">
               {player.longestStreak}
             </div>
           </div>
         </div>
 
         {/* Match History */}
-        <div className="bg-black/60 border-2 border-lime-900">
+        <div className="bg-black/60">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
             <h2 className="text-lime-500 font-bold text-md tracking-widest">RECENT BATTLES</h2>
           </div>

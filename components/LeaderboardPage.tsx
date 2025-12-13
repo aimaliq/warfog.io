@@ -53,9 +53,8 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
             <div className="col-span-1 flex items-center justify-center ml-2">#</div>
             <div className="col-span-1"></div>
             <div className="col-span-1"></div>
-            <div className="col-span-4 sm:col-span-5">COMMANDER</div>
-            <div className="col-span-2 flex items-center justify-center">WIN%</div>
-            <div className="col-span-3 flex items-center justify-center">SOL</div>
+            <div className="col-span-4 sm:col-span-5">PLAYER</div>
+            <div className="col-span-5 sm:col-span-4 flex items-center justify-center">SOL WON</div>
           </div>
 
           {/* Table Rows */}
@@ -114,19 +113,10 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                         {entry.username}
                       </div>
                     </div>
-                    <div className="col-span-2 flex items-center justify-center">
-                      <div className={`font-bold font-mono text-sm sm:text-base px-2 py-0.5 ${
-                        entry.winRate >= 70 ? 'text-lime-400' :
-                        entry.winRate >= 50 ? 'text-yellow-500' :
-                        'text-orange-400'
-                      }`}>
-                        {entry.winRate.toFixed(1)}%
-                      </div>
-                    </div>
-                    <div className="col-span-3 flex items-center justify-center">
+                    <div className="col-span-5 sm:col-span-4 flex items-center justify-center">
                       <div className="inline-block bg-black/50 px-2 sm:px-3 py-1 border border-lime-700/50 shadow-[0_0_10px_rgba(0,255,0,0.1)]">
                         <span className="text-lime-400 font-bold font-mono text-[14px] sm:text-base tracking-wider">
-                          {entry.gameBalance.toFixed(2)}
+                          {entry.totalSolWon.toFixed(2)}
                         </span>
                       </div>
                     </div>
