@@ -243,8 +243,9 @@ app.post('/api/match/settle', async (req, res) => {
       return res.status(404).json({ error: 'Match not found' });
     }
 
-    if (match.status !== 'active' && match.status !== 'waiting') {
-      return res.status(400).json({ error: 'Match is not active' });
+    // Allow settlement for completed matches (submit-turn marks them as completed before settlement is called)
+    if (match.status !== 'active' && match.status !== 'waiting' && match.status !== 'completed') {
+      return res.status(400).json({ error: 'Match is not in a valid state for settlement' });
     }
 
     // Determine loser
@@ -253,18 +254,12 @@ app.post('/api/match/settle', async (req, res) => {
     // Fetch winner and loser data
     const { data: winner, error: winnerError } = await supabase
       .from('players')
-      .select('game_balance, total_wins, total_matches')
+      .select('game_balance, total_sol_won')
       .eq('id', winnerId)
       .single();
 
-    const { data: loser, error: loserError } = await supabase
-      .from('players')
-      .select('total_losses, total_matches')
-      .eq('id', loserId)
-      .single();
-
-    if (winnerError || !winner || loserError || !loser) {
-      return res.status(404).json({ error: 'Player not found' });
+    if (winnerError || !winner) {
+      return res.status(404).json({ error: 'Winner not found' });
     }
 
     // Calculate pot and fee split
@@ -278,31 +273,17 @@ app.post('/api/match/settle', async (req, res) => {
     console.log(`   Winner payout: ${winnerPayout} SOL (95%)`);
     console.log(`   Platform fee: ${platformFee} SOL (5%)`);
 
-    // Update winner's balance and stats
+    // Update winner's balance (stats already updated by submit-turn endpoint)
     const { error: winnerUpdateError } = await supabase
       .from('players')
       .update({
         game_balance: parseFloat(winner.game_balance) + winnerPayout,
-        total_wins: (winner.total_wins || 0) + 1,
-        total_matches: (winner.total_matches || 0) + 1,
+        total_sol_won: (winner.total_sol_won || 0) + winnerPayout,
       })
       .eq('id', winnerId);
 
     if (winnerUpdateError) {
       throw new Error('Failed to update winner balance: ' + winnerUpdateError.message);
-    }
-
-    // Update loser's stats
-    const { error: loserUpdateError } = await supabase
-      .from('players')
-      .update({
-        total_losses: (loser.total_losses || 0) + 1,
-        total_matches: (loser.total_matches || 0) + 1,
-      })
-      .eq('id', loserId);
-
-    if (loserUpdateError) {
-      console.error('Warning: Failed to update loser stats:', loserUpdateError);
     }
 
     // Increment platform fees using database function
@@ -538,6 +519,24 @@ app.post('/api/matchmaking/join', async (req, res) => {
 
     console.log(`🎮 Player ${playerId} joined queue for ${wagerAmount} SOL`);
 
+    // Log activity: joined lobby
+    const { data: playerData } = await supabase
+      .from('players')
+      .select('wallet_address')
+      .eq('id', playerId)
+      .single();
+
+    if (playerData?.wallet_address) {
+      await supabase
+        .from('activity_logs')
+        .insert({
+          player_id: playerId,
+          wallet_address: playerData.wallet_address,
+          activity_type: 'joined_lobby',
+          details: { wager_amount: wagerAmount }
+        });
+    }
+
     // Attempt instant match using atomic database function
     const { data: matchResult, error: matchError } = await supabase
       .rpc('find_and_create_match', {
@@ -558,6 +557,37 @@ app.post('/api/matchmaking/join', async (req, res) => {
     if (matchResult && matchResult.length > 0 && matchResult[0].match_id) {
       const match = matchResult[0];
       console.log(`✅ Instant match found! Match ID: ${match.match_id}`);
+
+      // Log activity: match started for both players
+      if (playerData?.wallet_address) {
+        const { data: opponentData } = await supabase
+          .from('players')
+          .select('wallet_address')
+          .eq('id', match.opponent_id)
+          .single();
+
+        if (opponentData?.wallet_address) {
+          // Log for current player
+          await supabase
+            .from('activity_logs')
+            .insert({
+              player_id: playerId,
+              wallet_address: playerData.wallet_address,
+              activity_type: 'match_started',
+              details: { opponent_wallet: opponentData.wallet_address }
+            });
+
+          // Log for opponent
+          await supabase
+            .from('activity_logs')
+            .insert({
+              player_id: match.opponent_id,
+              wallet_address: opponentData.wallet_address,
+              activity_type: 'match_started',
+              details: { opponent_wallet: playerData.wallet_address }
+            });
+        }
+      }
 
       return res.json({
         status: 'matched',
@@ -1019,6 +1049,56 @@ app.post('/api/game/submit-turn', async (req, res) => {
   }
 });
 
+// Update player heartbeat (presence tracking)
+app.post('/api/game/heartbeat', async (req, res) => {
+  try {
+    const { matchId, playerId } = req.body;
+
+    if (!matchId || !playerId) {
+      return res.status(400).json({ error: 'Missing matchId or playerId' });
+    }
+
+    // Get match to determine which player this is
+    const { data: match, error: matchError } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+
+    if (matchError || !match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    // Skip if match is already completed
+    if (match.status === 'completed') {
+      return res.json({ success: true, matchCompleted: true });
+    }
+
+    const isPlayer1 = match.player1_id === playerId;
+    const now = new Date().toISOString();
+
+    // Update player's last active timestamp
+    const updateData = isPlayer1 ? {
+      player1_last_active: now
+    } : {
+      player2_last_active: now
+    };
+
+    await supabase
+      .from('game_states')
+      .update(updateData)
+      .eq('match_id', matchId);
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('❌ Heartbeat error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to update heartbeat'
+    });
+  }
+});
+
 // Get current game state (for polling)
 app.get('/api/game/state/:matchId', async (req, res) => {
   try {
@@ -1046,6 +1126,69 @@ app.get('/api/game/state/:matchId', async (req, res) => {
       return res.status(404).json({ error: 'Match not found' });
     }
 
+    // Check for player resignation (inactive for more than 10 seconds)
+    if (match.status === 'active' && gameState.player1_last_active && gameState.player2_last_active) {
+      const now = Date.now();
+      const player1LastActive = new Date(gameState.player1_last_active).getTime();
+      const player2LastActive = new Date(gameState.player2_last_active).getTime();
+      const RESIGNATION_TIMEOUT = 10000; // 10 seconds
+
+      let resignedPlayerId = null;
+      let winnerId = null;
+
+      if (now - player1LastActive > RESIGNATION_TIMEOUT) {
+        resignedPlayerId = match.player1_id;
+        winnerId = match.player2_id;
+      } else if (now - player2LastActive > RESIGNATION_TIMEOUT) {
+        resignedPlayerId = match.player2_id;
+        winnerId = match.player1_id;
+      }
+
+      if (resignedPlayerId && winnerId) {
+        console.log(`🏳️ Player ${resignedPlayerId.slice(0, 8)}... resigned from match ${matchId}`);
+        console.log(`🏆 Player ${winnerId.slice(0, 8)}... wins by resignation`);
+
+        // Update match status
+        await supabase
+          .from('matches')
+          .update({
+            status: 'completed',
+            winner_id: winnerId,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', matchId);
+
+        // Update player stats
+        await supabase.rpc('increment_player_stats', {
+          p_player_id: winnerId,
+          p_wins: 1,
+          p_losses: 0
+        });
+
+        await supabase.rpc('increment_player_stats', {
+          p_player_id: resignedPlayerId,
+          p_wins: 0,
+          p_losses: 1
+        });
+
+        // Refetch updated match
+        const { data: updatedMatch } = await supabase
+          .from('matches')
+          .select('*')
+          .eq('id', matchId)
+          .single();
+
+        return res.json({
+          gameState,
+          match: updatedMatch || match,
+          resignation: {
+            resignedPlayerId,
+            winnerId
+          }
+        });
+      }
+    }
+
     res.json({
       gameState,
       match
@@ -1057,6 +1200,196 @@ app.get('/api/game/state/:matchId', async (req, res) => {
       error: error.message || 'Failed to get game state'
     });
   }
+});
+
+// ==============================================
+// REMATCH SYSTEM
+// ==============================================
+// In-memory storage for rematch requests (expires after 10 seconds)
+const rematchRequests = new Map();
+
+// Request rematch
+app.post('/api/rematch/request', async (req, res) => {
+  try {
+    const { matchId, playerId } = req.body;
+
+    if (!matchId || !playerId) {
+      return res.status(400).json({ error: 'Missing matchId or playerId' });
+    }
+
+    // Get original match details
+    const { data: match, error: matchError } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
+
+    if (matchError || !match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    // Verify player was in this match
+    if (match.player1_id !== playerId && match.player2_id !== playerId) {
+      return res.status(403).json({ error: 'You were not in this match' });
+    }
+
+    const opponentId = match.player1_id === playerId ? match.player2_id : match.player1_id;
+
+    // Check if opponent already requested rematch
+    const existingRequest = rematchRequests.get(matchId);
+    if (existingRequest && existingRequest.requesterId === opponentId) {
+      // Both players want rematch! Create new match
+      console.log(`🔄 Both players accepted rematch for match ${matchId}`);
+
+      // Deduct balances for new match
+      const wagerAmount = match.wager_amount;
+
+      // Deduct from both players
+      const { data: player1Data } = await supabase
+        .from('players')
+        .select('game_balance')
+        .eq('id', match.player1_id)
+        .single();
+
+      const { data: player2Data } = await supabase
+        .from('players')
+        .select('game_balance')
+        .eq('id', match.player2_id)
+        .single();
+
+      if (!player1Data || !player2Data) {
+        return res.status(404).json({ error: 'Player not found' });
+      }
+
+      if (player1Data.game_balance < wagerAmount || player2Data.game_balance < wagerAmount) {
+        return res.status(400).json({ error: 'Insufficient balance for rematch' });
+      }
+
+      // Deduct balances
+      await supabase
+        .from('players')
+        .update({ game_balance: player1Data.game_balance - wagerAmount })
+        .eq('id', match.player1_id);
+
+      await supabase
+        .from('players')
+        .update({ game_balance: player2Data.game_balance - wagerAmount })
+        .eq('id', match.player2_id);
+
+      // Create new match
+      const { data: newMatch, error: createError } = await supabase
+        .from('matches')
+        .insert({
+          player1_id: match.player1_id,
+          player2_id: match.player2_id,
+          wager_amount: wagerAmount,
+          status: 'active'
+        })
+        .select()
+        .single();
+
+      if (createError || !newMatch) {
+        throw new Error('Failed to create rematch');
+      }
+
+      // Create game state for new match
+      await supabase
+        .from('game_states')
+        .insert({
+          match_id: newMatch.id,
+          player1_silos: [2, 2, 2, 2, 2],
+          player2_silos: [2, 2, 2, 2, 2],
+          current_turn: 1
+        });
+
+      // Update rematch request with accepted status so the other player can discover it
+      rematchRequests.set(matchId, {
+        accepted: true,
+        newMatchId: newMatch.id,
+        expiresAt: Date.now() + 5000 // Keep for 5 seconds for discovery
+      });
+
+      // Clear after 5 seconds
+      setTimeout(() => {
+        rematchRequests.delete(matchId);
+      }, 5000);
+
+      console.log(`✅ Rematch created: ${newMatch.id}`);
+
+      return res.json({
+        accepted: true,
+        newMatchId: newMatch.id
+      });
+    }
+
+    // Store rematch request
+    rematchRequests.set(matchId, {
+      requesterId: playerId,
+      opponentId: opponentId,
+      expiresAt: Date.now() + 10000 // 10 seconds
+    });
+
+    // Auto-cleanup after 10 seconds
+    setTimeout(() => {
+      rematchRequests.delete(matchId);
+    }, 10000);
+
+    console.log(`🔄 Rematch requested by ${playerId.slice(0, 8)}... for match ${matchId}`);
+
+    res.json({
+      status: 'waiting',
+      expiresIn: 10000
+    });
+
+  } catch (error) {
+    console.error('❌ Rematch request error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to request rematch'
+    });
+  }
+});
+
+// Check rematch status (for polling)
+app.get('/api/rematch/status/:matchId/:playerId', (req, res) => {
+  const { matchId, playerId } = req.params;
+
+  const request = rematchRequests.get(matchId);
+
+  if (!request) {
+    return res.json({ status: 'none' });
+  }
+
+  // Check if rematch was accepted (both players clicked)
+  if (request.accepted && request.newMatchId) {
+    return res.json({
+      status: 'accepted',
+      newMatchId: request.newMatchId
+    });
+  }
+
+  // Check if expired
+  if (Date.now() > request.expiresAt) {
+    rematchRequests.delete(matchId);
+    return res.json({ status: 'expired' });
+  }
+
+  // If this player initiated the request
+  if (request.requesterId === playerId) {
+    return res.json({
+      status: 'waiting',
+      timeLeft: Math.max(0, request.expiresAt - Date.now())
+    });
+  }
+
+  // If opponent initiated
+  if (request.opponentId === playerId) {
+    return res.json({
+      status: 'pending',
+      timeLeft: Math.max(0, request.expiresAt - Date.now())
+    });
+  }
+
+  res.json({ status: 'none' });
 });
 
 const PORT = process.env.PORT || 3003;

@@ -5,7 +5,9 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useOnlinePlayers } from '../hooks/useOnlinePlayers';
 import { supabase } from '../lib/supabase';
 import { useRecentWins } from '../hooks/useRecentWins';
+import { useActivityFeed } from '../hooks/useActivityFeed';
 import { WinsTicker } from './WinsTicker';
+import { FlagIcon } from './FlagIcon';
 
 interface LobbyPageProps {
   player: Player;
@@ -23,6 +25,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   const { connected, publicKey } = useWallet();
   const { onlineCount, isLoading } = useOnlinePlayers();
   const { wins } = useRecentWins();
+  const { activities } = useActivityFeed();
   const [isHowToPlayOpen, setIsHowToPlayOpen] = useState(false);
   const [selectedBet, setSelectedBet] = useState<number>(0.01);
   const [gameBalance, setGameBalance] = useState<number>(0);
@@ -256,13 +259,13 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-4xl font-black text-lime-500 animate-pulse">WARFOG.IO</h1>
+          <h1 className="text-3xl font-black text-lime-500 animate-pulse">WARFOG.IO</h1>
           <WalletButton className="wallet-custom" />
         </div>
       
 
         {/* How to Play Section */}
-        <div className="bg-black/60 mb-6">
+        <div className="bg-black/60 mb-2">
           <button
             onClick={() => setIsHowToPlayOpen(!isHowToPlayOpen)}
             className="w-full px-4 py-3 flex items-center justify-center gap-2 hover:bg-lime-900/10 transition-all relative"
@@ -278,39 +281,40 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="px-4 pb-4 pt-2 border-t border-lime-900/30 space-y-4 animate-fadeIn">
                             
               {/* Step 1 */}
+              
               <div className="flex gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
                   <span className="text-yellow-500 font-black text-sm">1</span>
                 </div>
                 <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">DEFEND YOUR SILOS</div>
+                  <div className="text-lime-500 font-bold text-sm mb-1">ATTACK THE ENEMY</div>
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    Select 2 silos to protect from enemy missiles. Hit silos lose 1 HP (2 HP each).
+                    Attack 3 enemy silos. Each silo destroyed grants you +1 HP on your defenses.
                   </p>
                   <div>
                     <img
-                      src="/defend-mechanics.gif"
-                      alt="Defend mechanics"
+                      src="/attack-mechanics.gif"
+                      alt="Attack mechanics"
                       className="w-full rounded-md"
                     />
                   </div>
                 </div>
               </div>
-
+              
               {/* Step 2 */}
               <div className="flex gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
                   <span className="text-yellow-500 font-black text-sm">2</span>
                 </div>
                 <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">ATTACK THE ENEMY</div>
+                  <div className="text-lime-500 font-bold text-sm mb-1">DEFEND YOUR SILOS</div>
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    Select 3 enemy silos to attack. Each destroyed silo grants you +1 HP to allocate on your defenses.
+                    Defend 2 silos from enemy missiles. Hit silos lose -1 HP.
                   </p>
                   <div>
                     <img
-                      src="/attack-mechanics.gif"
-                      alt="Attack mechanics"
+                      src="/defend-mechanics.gif"
+                      alt="Defend mechanics"
                       className="w-full rounded-md"
                     />
                   </div>
@@ -325,7 +329,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 <div className="flex-1">
                   <div className="text-lime-500 font-bold text-sm mb-1">DESTROY 3 TO WIN</div>
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    First player to destroy 3 enemy silos wins the match.
+                    Destroy 3 enemy silos to win the match.
                   </p>
                 </div>
               </div>
@@ -337,49 +341,49 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 </div>
                 <div className="flex-1">
                   <div className="text-lime-500 font-bold text-sm mb-1">10-SECOND TURNS</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
+                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
                     Fast decisions. No time for caution.
                   </p>
                 </div>
               </div>
+
+              {/* Join Battle Button */}
+                <div className="btn-snake-wrapper">
+                  <svg xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
+                        <stop offset="30%" style={{ stopColor: '#84cc16', stopOpacity: 0.3 }} />
+                        <stop offset="70%" style={{ stopColor: '#a3e635', stopOpacity: 0.5 }} />
+                        <stop offset="100%" style={{ stopColor: '#84cc16', stopOpacity: 1 }} />
+                      </linearGradient>
+                      <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
+                        <stop offset="30%" style={{ stopColor: '#65a30d', stopOpacity: 0.3 }} />
+                        <stop offset="70%" style={{ stopColor: '#84cc16', stopOpacity: 0.5 }} />
+                        <stop offset="100%" style={{ stopColor: '#65a30d', stopOpacity: 1 }} />
+                      </linearGradient>
+                    </defs>
+                    <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
+                    <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
+                  </svg>
+                  <button
+                    onClick={() => onStartBattle()}
+                    disabled={isInBattle}
+                    className="w-full py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
+                  >
+                    JOIN FREE BATTLE
+                  </button>
+                </div>
             </div>
           )}
         </div>
-
-        {/* Join Battle Button */}
-        <div className="btn-snake-wrapper">
-          <svg xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
-                <stop offset="30%" style={{ stopColor: '#84cc16', stopOpacity: 0.3 }} />
-                <stop offset="70%" style={{ stopColor: '#a3e635', stopOpacity: 0.5 }} />
-                <stop offset="100%" style={{ stopColor: '#84cc16', stopOpacity: 1 }} />
-              </linearGradient>
-              <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
-                <stop offset="30%" style={{ stopColor: '#65a30d', stopOpacity: 0.3 }} />
-                <stop offset="70%" style={{ stopColor: '#84cc16', stopOpacity: 0.5 }} />
-                <stop offset="100%" style={{ stopColor: '#65a30d', stopOpacity: 1 }} />
-              </linearGradient>
-            </defs>
-            <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
-            <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
-          </svg>
-          <button
-            onClick={() => onStartBattle()}
-            disabled={isInBattle}
-            className="w-full py-4 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
-          >
-            JOIN FREE BATTLE
-          </button>
-        </div>
-
+      
         <div className="text-center mt-3 text-xs text-gray-600 mb-6">
         </div>
 
         {/* Live Operations Table */}
-        <div className="bg-black/60 mt-10">
+        <div className="bg-black/60 mt-5">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10 flex justify-between items-center">
             <h2 className="text-lime-500 font-bold text-md tracking-widest">SOL BATTLES</h2>
             <div className="flex items-center gap-2">
@@ -489,18 +493,129 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           </div>
         </div>
 
+        {/* Activity Feed */}
+        <div className="bg-black/60 mt-4">
+          <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
+            <h2 className="text-lime-500 font-bold text-md tracking-widest">ACTIVITY</h2>
+          </div>
+          <div className="p-2 space-y-2">
+            {activities.length > 0 ? (
+              (() => {
+                // Deduplicate "started battle" activities (they appear twice, once for each player)
+                const deduplicatedActivities: typeof activities = [];
+                const seenBattles = new Set<string>();
+
+                activities.forEach((activity) => {
+                  if (activity.message.includes('started battle')) {
+                    // Extract both wallets from the message
+                    const match = activity.message.match(/(.+?) started battle vs (.+)/);
+                    if (match) {
+                      const [_, wallet1, wallet2] = match;
+                      // Create a unique key for this battle (sorted wallets to avoid duplicates)
+                      const battleKey = [wallet1, wallet2].sort().join('-');
+                      if (!seenBattles.has(battleKey)) {
+                        seenBattles.add(battleKey);
+                        deduplicatedActivities.push(activity);
+                      }
+                    }
+                  } else {
+                    deduplicatedActivities.push(activity);
+                  }
+                });
+
+                return deduplicatedActivities.slice(0, 7).map((activity) => {
+                  const timeAgo = Math.floor((Date.now() - activity.timestamp) / 1000);
+                  let timeDisplay = '';
+                  if (timeAgo < 5) {
+                    timeDisplay = 'now...';
+                  } else if (timeAgo < 60) {
+                    timeDisplay = `${timeAgo}s ago`;
+                  } else if (timeAgo < 3600) {
+                    timeDisplay = `${Math.floor(timeAgo / 60)}m ago`;
+                  } else if (timeAgo < 86400) {
+                    timeDisplay = `${Math.floor(timeAgo / 3600)}h ago`;
+                  } else {
+                    timeDisplay = `${Math.floor(timeAgo / 86400)}d ago`;
+                  }
+
+                  // Parse the message to extract wallet, action, and SOL amount
+                  const messageParts = activity.message.split(' ');
+                  const wallet = messageParts[0]; // e.g., "Fu8s...Shmz"
+
+                  // Determine emoji, action text, and formatting
+                  let emoji = '';
+                  let content: JSX.Element | null = null;
+
+                  if (activity.message.includes('joined')) {
+                    const lobbyMatch = activity.message.match(/joined ([\d.]+) lobby/);
+                    if (lobbyMatch) {
+                      emoji = '🚀';
+                      content = (
+                        <>
+                          {activity.countryCode && <FlagIcon countryCode={activity.countryCode} width="16px" height="12px" />}
+                          <span className="text-white"> {wallet}</span>
+                          <span className="text-blue-400"> joined lobby </span>
+                          <span className="text-lime-400">{lobbyMatch[1]}</span>
+                        </>
+                      );
+                    }
+                  } else if (activity.message.includes('started battle')) {
+                    const vsMatch = activity.message.match(/(.+?) started battle vs (.+)/);
+                    if (vsMatch) {
+                      emoji = '⚔️';
+                      const wallet1 = vsMatch[1];
+                      const wallet2 = vsMatch[2];
+                      content = (
+                        <>
+                          {activity.countryCode && <FlagIcon countryCode={activity.countryCode} width="16px" height="12px" />}
+                          <span className="text-white"> {wallet1}</span>
+                          <span className="text-yellow-400"> vs </span>
+                          {activity.opponentCountryCode && <FlagIcon countryCode={activity.opponentCountryCode} width="16px" height="12px" />}
+                          <span className="text-white"> {wallet2}</span>
+                        </>
+                      );
+                    }
+                  } else if (activity.message.includes('connected wallet')) {
+                    emoji = '💎';
+                    content = (
+                      <>
+                        {activity.countryCode && <FlagIcon countryCode={activity.countryCode} width="16px" height="12px" />}
+                        <span className="text-white"> {wallet}</span>
+                        <span className="text-red-400"> connected wallet</span>
+                      </>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={activity.id}
+                      className="flex items-center gap-2 py-2 px-3 hover:bg-gray-900/20 transition-all text-xs font-bold border-b border-gray-700/20 last:border-b-0"
+                    >
+                      <span className="flex-1">{content}</span>
+                      <span className="text-gray-500 text-xs">{timeDisplay}</span>
+                      <span className="text-md">{emoji}</span>
+                    </div>
+                  );
+                });
+              })()
+            ) : (
+              <div className="text-center py-8 text-gray-600 text-sm">No activity yet</div>
+            )}
+          </div>
+        </div>
+
         {/* Latest Wins Table */}
-        <div className={`mt-6 bg-black/60 transition-transform ${isWinsShaking ? 'animate-shake' : ''}`}>
+        <div className={`bg-black/60 mt-4 transition-transform ${isWinsShaking ? 'animate-shake' : ''}`}>
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
             <h2 className="text-lime-500 font-bold text-md tracking-widest">LATEST WINS</h2>
           </div>
-          
+
         {/* Recent Wins Ticker */}
         <WinsTicker wins={wins} />
 
           <div className="p-2 space-y-2">
-            {wins.length > 0 ? (
-              wins.slice(0, 10).map((win, index) => {
+            {wins.length > 1 ? (
+              wins.slice(1, 8).map((win) => {
                 const timeAgo = Math.floor((Date.now() - win.timestamp) / 1000);
                 let timeDisplay = '';
                 if (timeAgo < 60) {
@@ -513,29 +628,21 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   timeDisplay = `${Math.floor(timeAgo / 86400)}d ago`;
                 }
 
-                // Emoji pairs rotating through different combinations
-                const emojiPairs = [
-                  { left: '🔥', right: '💰' },
-                  { left: '💵', right: '💸' },
-                  { left: '🚀', right: '💎' },
-                  { left: '🎯', right: '🏆' },
-                  { left: '💰', right: '💵' },
-                ];
-                const emojis = emojiPairs[index % emojiPairs.length];
-
                 return (
                   <div
                     key={win.id}
-                    className="flex items-center justify-center gap-2 py-2 px-3 hover:bg-gray-900/20 transition-all text-sm font-bold border-b border-gray-700/20 last:border-b-0"
+                    className="flex items-center gap-2 py-2 px-3 hover:bg-gray-900/20 transition-all text-xs font-bold border-b border-gray-700/20 last:border-b-0"
                   >
-                    <span className="text-yellow-400 text-lg">{emojis.left}</span>
+                    {win.countryCode && <FlagIcon countryCode={win.countryCode} width="16px" height="12px" />}
                     <span className="text-white">{win.winnerWallet}</span>
-                    <span className="text-purple-400 text-xs">just won</span>
+                    <span className="text-purple-400">won</span>
                     <span className="text-lime-400 font-black">{win.amount.toFixed(2)} SOL</span>
-                    <span className="text-gray-500 text-xs ml-1">{timeDisplay}</span>
+                    <span className="text-gray-500 ml-1">{timeDisplay}</span>
                   </div>
                 );
               })
+            ) : wins.length === 1 ? (
+              <div className="text-center py-8 text-gray-600 text-sm">More wins coming soon...</div>
             ) : (
               <div className="text-center py-8 text-gray-600 text-sm">No wins yet</div>
             )}

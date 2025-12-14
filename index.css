@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Emoji font support for proper flag rendering */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "Apple Color Emoji", sans-serif;
+}
+
 /* Solana Wallet Adapter - Dropdown wrapper must be full width */
 .wallet-adapter-dropdown {
   width: 100%;

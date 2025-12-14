@@ -222,6 +222,10 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
   const [lastTurnResolvedAt, setLastTurnResolvedAt] = useState<string | null>(null);
   const [submittedMoves, setSubmittedMoves] = useState<{defenses: number[], attacks: number[]} | null>(null);
 
+  // Rematch state
+  const [rematchCountdown, setRematchCountdown] = useState(0);
+  const [rematchStatus, setRematchStatus] = useState('');
+
   // Load real opponent data when matchId exists
   useEffect(() => {
     if (!matchId || matchDataLoaded) return;
@@ -298,6 +302,84 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
     loadMatchData();
   }, [matchId, gameState.player1.id, matchDataLoaded]);
 
+  // Send heartbeat to server (presence tracking for resignation detection)
+  useEffect(() => {
+    if (!matchId || gameState.phase === GamePhase.GAME_OVER) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        await fetch('http://localhost:3003/api/game/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            matchId,
+            playerId: player.id
+          })
+        });
+      } catch (error) {
+        console.error('❌ Heartbeat error:', error);
+      }
+    };
+
+    // Send heartbeat immediately
+    sendHeartbeat();
+
+    // Send heartbeat every 3 seconds
+    const interval = setInterval(sendHeartbeat, 3000);
+
+    return () => clearInterval(interval);
+  }, [matchId, player.id, gameState.phase]);
+
+  // Continuous resignation detection during active match (even when not waiting)
+  useEffect(() => {
+    if (!matchId || gameState.phase === GamePhase.GAME_OVER || gameState.phase === GamePhase.MATCHMAKING) return;
+
+    const checkResignation = async () => {
+      try {
+        const response = await fetch(`http://localhost:3003/api/game/state/${matchId}`);
+        const data = await response.json();
+
+        if (data.resignation) {
+          console.log('🏳️ Opponent resigned during active play!');
+
+          setGameState(current => ({
+            ...current,
+            phase: GamePhase.GAME_OVER,
+            winner: data.resignation.winnerId,
+            winReason: 'OPPONENT_FORFEIT'
+          }));
+
+          // Trigger settlement for wagered match
+          if (data.match.wager_amount && data.match.wager_amount > 0 && data.resignation.winnerId) {
+            console.log(`💰 Settling wagered match after resignation: ${matchId}`);
+            fetch('http://localhost:3003/api/match/settle', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                matchId: matchId,
+                winnerId: data.resignation.winnerId
+              })
+            })
+            .then(res => res.json())
+            .then(data => {
+              console.log('✅ Match settlement complete:', data);
+            })
+            .catch(err => {
+              console.error('❌ Match settlement error:', err);
+            });
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error checking resignation:', error);
+      }
+    };
+
+    // Check for resignation every 2 seconds
+    const interval = setInterval(checkResignation, 2000);
+
+    return () => clearInterval(interval);
+  }, [matchId, gameState.phase, setGameState]);
+
   // Poll for game state updates when waiting for opponent or turn resolution
   useEffect(() => {
     if (!matchId || !waitingForOpponent) return;
@@ -314,7 +396,45 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
           return;
         }
 
-        const { gameState: serverState, match } = data;
+        const { gameState: serverState, match, resignation } = data;
+
+        // Check for resignation
+        if (resignation) {
+          console.log('🏳️ Opponent resigned!');
+          setWaitingForOpponent(false);
+
+          // Determine if current player won
+          const isWinner = resignation.winnerId === player.id;
+
+          setGameState(current => ({
+            ...current,
+            phase: GamePhase.GAME_OVER,
+            winner: resignation.winnerId,
+            winReason: 'OPPONENT_FORFEIT'
+          }));
+
+          // Trigger settlement for wagered match
+          if (match.wager_amount && match.wager_amount > 0 && resignation.winnerId) {
+            console.log(`💰 Settling wagered match after resignation: ${matchId}`);
+            fetch('http://localhost:3003/api/match/settle', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                matchId: matchId,
+                winnerId: resignation.winnerId
+              })
+            })
+            .then(res => res.json())
+            .then(data => {
+              console.log('✅ Match settlement complete:', data);
+            })
+            .catch(err => {
+              console.error('❌ Match settlement error:', err);
+            });
+          }
+
+          return;
+        }
 
         // Check if turn has been resolved (turn_resolved_at changed)
         if (serverState.turn_resolved_at && serverState.turn_resolved_at !== lastTurnResolvedAt) {
@@ -338,7 +458,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
       console.log('⏹️ Stopping game state polling');
       clearInterval(interval);
     };
-  }, [matchId, waitingForOpponent, lastTurnResolvedAt]);
+  }, [matchId, waitingForOpponent, lastTurnResolvedAt, player.id, setGameState]);
 
   // Function to apply server-resolved turn and trigger animations
   const applyServerResolvedTurn = useCallback((serverState: any, match: any) => {
@@ -465,6 +585,26 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
           if (match.status === 'completed') {
             // Game over
             console.log('🏁 Game over! Winner:', match.winner_id);
+
+            // Call settlement endpoint if this is a wagered match
+            if (match.wager_amount && match.wager_amount > 0 && match.winner_id) {
+              console.log(`💰 Settling wagered match: ${matchId}`);
+              fetch('http://localhost:3003/api/match/settle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  matchId: matchId,
+                  winnerId: match.winner_id
+                })
+              })
+              .then(res => res.json())
+              .then(data => {
+                console.log('✅ Match settlement complete:', data);
+              })
+              .catch(err => {
+                console.error('❌ Match settlement error:', err);
+              });
+            }
 
             setGameState(current => {
               const winner = match.winner_id || 'TIE';
@@ -1239,37 +1379,68 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
      const isWin = gameState.winner === player.id;
      const isDraw = gameState.winner === 'TIE';
      const isFreeMatch = gameState.betAmount === 0;
+     const isResignation = gameState.winReason === 'OPPONENT_FORFEIT';
 
      return (
          <div className="flex flex-col items-center justify-center min-h-screen animate-pulse z-50 relative w-full px-4">
              <h1 className={`text-5xl font-black mb-8 text-center ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
-                 {isDraw ? 'TACTICAL STALEMATE' : isWin ? 'TARGET DESTROYED' : 'MISSION FAILED'}
+                 {isDraw ? 'TACTICAL STALEMATE' : isWin ? (isResignation ? 'OPPONENT RESIGNED' : 'TARGET DESTROYED') : 'MISSION FAILED'}
              </h1>
 
+             {isResignation && isWin && (
+               <div className="text-xl text-yellow-400 mb-4 font-bold tracking-wider animate-pulse">
+                 ENEMY COMMANDER FLED THE BATTLEFIELD
+               </div>
+             )}
+
              {!isFreeMatch && (
-               <div className="text-3xl mb-8 font-bold font-mono">
+               <div className={`text-3xl mb-8 font-bold font-mono ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
                    {isDraw ? '0 SOL' : isWin ? `+${(gameState.betAmount * 1.9).toFixed(3)} SOL` : `-${gameState.betAmount.toFixed(3)} SOL`}
                </div>
              )}
-             <div className="flex gap-8 mb-8">
-                 <div className="text-center">
-                     <div className="text-xs text-lime-500 mb-1">SILOS DESTROYED</div>
-                     <div className="text-4xl text-lime-500 font-black">{enemyDestroyedCount}/5</div>
-                 </div>
-                 <div className="text-center">
-                     <div className="text-xs text-lime-500 mb-1">SILOS LOST</div>
-                     <div className="text-4xl text-lime-500 font-black">{playerDestroyedCount}/5</div>
-                 </div>
-             </div>
+
+             {/* Rematch status message */}
+             {rematchStatus && (
+               <div className="text-xl mb-6 font-bold text-yellow-400 animate-pulse">
+                 {rematchStatus}
+                 {rematchCountdown > 0 && ` (${rematchCountdown}s)`}
+               </div>
+             )}
 
              {/* Share Victory - Only for wins and registered users */}
              {isWin && !player.isGuest && (
-               <ShareVictory
-                 player={player}
-                 enemy={enemy}
-                 betAmount={gameState.betAmount}
-                 basesDestroyed={enemyDestroyedCount}
-               />
+               <div className="flex flex-col items-center mb-6">
+                 <div className="text-sm text-gray-400 mb-3 tracking-widest">SHARE WIN:</div>
+                 <div className="flex flex-row gap-3 w-64">
+                   <button
+                     onClick={() => {
+                       const winRate = player.gamesPlayed > 0 ? ((player.wins / player.gamesPlayed) * 100).toFixed(1) : '0.0';
+                       const solWon = (gameState.betAmount * 1.9).toFixed(2);
+                       const shareText = `I just won ${solWon} SOL playing against ${enemy.username} on WARFOG.IO\n\n🔥 ${player.currentStreak} win streak | ${winRate}% overall\n\nJoin WARFOG.IO\n\n#WARFOG #Solana #PvPGaming\nwarfog.io`;
+                       const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+                       window.open(tweetUrl, '_blank', 'width=550,height=420');
+                     }}
+                     className="flex-1 py-3 px-4 bg-yellow-900/20 border-2 border-yellow-400 text-yellow-400 font-bold font-mono text-xs tracking-wider hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse"
+                   >
+                     SHARE ON X
+                   </button>
+                   <button
+                     onClick={async () => {
+                       try {
+                         const winRate = player.gamesPlayed > 0 ? ((player.wins / player.gamesPlayed) * 100).toFixed(1) : '0.0';
+                         const solWon = (gameState.betAmount * 1.9).toFixed(2);
+                         const shareText = `I just won ${solWon} SOL playing against ${enemy.username} on WARFOG.IO\n\n🔥 ${player.currentStreak} win streak | ${winRate}% overall\n\nJoin WARFOG.IO\n\n#WARFOG #Solana #PvPGaming\nwarfog.io`;
+                         await navigator.clipboard.writeText(shareText);
+                       } catch (err) {
+                         console.error('Failed to copy:', err);
+                       }
+                     }}
+                     className="flex-1 py-3 px-4 bg-yellow-900/20 border-2 border-yellow-400 text-yellow-400 font-bold font-mono text-xs tracking-wider hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse"
+                   >
+                     COPY LINK
+                   </button>
+                 </div>
+               </div>
              )}
 
              {isDraw ? (
@@ -1310,11 +1481,121 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                  </button>
                </>
              ) : (
-               <button
-                  onClick={() => window.location.reload()}
-                  className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
-               >RETURN TO LOBBY
-               </button>
+               <>
+                 {/* Rematch button - only for wagered matches */}
+                 {matchId && !isFreeMatch && (
+                   <button
+                      onClick={async () => {
+                        try {
+                          const response = await fetch('http://localhost:3003/api/rematch/request', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              matchId: matchId,
+                              playerId: player.id
+                            })
+                          });
+                          const data = await response.json();
+
+                          if (data.accepted) {
+                            // Both players accepted! Navigate to new match
+                            console.log('🔄 Rematch accepted! New match:', data.newMatchId);
+                            setRematchStatus('MATCH RESTARTING...');
+                            setTimeout(() => {
+                              window.location.href = `/?matchId=${data.newMatchId}`;
+                            }, 1000);
+                          } else if (data.status === 'waiting') {
+                            // Waiting for opponent - start polling
+                            console.log('⏳ Waiting for opponent to accept rematch...');
+                            setRematchStatus("WAITING FOR OPPONENT");
+                            setRematchCountdown(10);
+
+                            let countdown = 10;
+                            const countdownInterval = setInterval(() => {
+                              countdown--;
+                              setRematchCountdown(countdown);
+                              if (countdown <= 0) {
+                                clearInterval(countdownInterval);
+                                setRematchStatus("OPPONENT DECLINED");
+                                setTimeout(() => {
+                                  setRematchStatus('');
+                                  setRematchCountdown(0);
+                                }, 3000);
+                              }
+                            }, 1000);
+
+                            // Poll for status using dedicated status endpoint
+                            const pollInterval = setInterval(async () => {
+                              try {
+                                const checkResponse = await fetch(`http://localhost:3003/api/rematch/status/${matchId}/${player.id}`);
+                                const checkData = await checkResponse.json();
+
+                                if (checkData.status === 'accepted' && checkData.newMatchId) {
+                                  // Rematch was accepted by both players!
+                                  clearInterval(pollInterval);
+                                  clearInterval(countdownInterval);
+                                  console.log('🔄 Rematch accepted! New match:', checkData.newMatchId);
+                                  setRematchStatus('MATCH RESTARTING...');
+                                  setRematchCountdown(0);
+                                  setTimeout(() => {
+                                    window.location.href = `/?matchId=${checkData.newMatchId}`;
+                                  }, 1000);
+                                } else if (checkData.status === 'pending') {
+                                  // Opponent wants rematch! Accept it
+                                  const acceptResponse = await fetch('http://localhost:3003/api/rematch/request', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      matchId: matchId,
+                                      playerId: player.id
+                                    })
+                                  });
+                                  const acceptData = await acceptResponse.json();
+
+                                  if (acceptData.accepted) {
+                                    clearInterval(pollInterval);
+                                    clearInterval(countdownInterval);
+                                    console.log('🔄 Rematch accepted! New match:', acceptData.newMatchId);
+                                    setRematchStatus('MATCH RESTARTING...');
+                                    setRematchCountdown(0);
+                                    setTimeout(() => {
+                                      window.location.href = `/?matchId=${acceptData.newMatchId}`;
+                                    }, 1000);
+                                  }
+                                } else if (checkData.status === 'expired' || checkData.status === 'none') {
+                                  // Request expired or was cancelled
+                                  clearInterval(pollInterval);
+                                  clearInterval(countdownInterval);
+                                }
+                              } catch (error) {
+                                console.error('Poll error:', error);
+                              }
+                            }, 1000);
+
+                            // Stop polling after 10 seconds
+                            setTimeout(() => {
+                              clearInterval(pollInterval);
+                              clearInterval(countdownInterval);
+                            }, 10000);
+                          }
+                        } catch (error) {
+                          console.error('❌ Rematch error:', error);
+                          setRematchStatus("REMATCH ERROR");
+                          setTimeout(() => {
+                            setRematchStatus('');
+                          }, 3000);
+                        }
+                      }}
+                      className="w-64 py-3 bg-yellow-900/40 border-2 border-yellow-400 text-yellow-400 font-bold hover:bg-yellow-900/60 transition-all mb-3"
+                   >REMATCH ({gameState.betAmount.toFixed(3)} SOL)
+                   </button>
+                 )}
+                 <button
+                    onClick={() => window.location.reload()}
+                    className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
+                 >RETURN TO LOBBY
+                 </button>
+               </>
              )}
 
              {/* Victory Streak Display */}

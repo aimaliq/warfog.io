@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { RecentWin } from '../hooks/useRecentWins';
+import { FlagIcon } from './FlagIcon';
 
 interface WinsTickerProps {
   wins: RecentWin[];
 }
 
 export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [isShaking, setIsShaking] = useState(false);
+  const [colorIndex, setColorIndex] = useState(0);
 
   useEffect(() => {
     if (wins.length === 0) return;
 
+    // Change color every 3 seconds and shake
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % wins.length);
+      setColorIndex((prev) => (prev + 1) % 4);
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
     }, 3000);
@@ -33,7 +35,8 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
     );
   }
 
-  const currentWin = wins[currentIndex];
+  // Always show the latest win (first in array)
+  const currentWin = wins[0];
 
   // Calculate time ago
   const timeAgo = Math.floor((Date.now() - currentWin.timestamp) / 1000);
@@ -56,17 +59,7 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
     { bg: 'from-blue-600/10 via-cyan-600/10 to-blue-600/10', border: 'border-blue-500/40', shimmer: 'via-cyan-500/5' },
   ];
 
-  // Emojis array
-  const emojiPairs = [
-    { left: '🔥', right: '💰' },
-    { left: '💵', right: '💸' },
-    { left: '🚀', right: '💎' },
-    { left: '🎯', right: '🏆' },
-    { left: '💰', right: '💵' },
-  ];
-
-  const colorScheme = gradients[currentIndex % gradients.length];
-  const emojis = emojiPairs[currentIndex % emojiPairs.length];
+  const colorScheme = gradients[colorIndex % gradients.length];
 
   return (
     <div className={`relative bg-gradient-to-r ${colorScheme.bg} border-2 ${colorScheme.border} px-4 py-2.5 overflow-hidden transition-all duration-200 ${
@@ -77,9 +70,9 @@ export const WinsTicker: React.FC<WinsTickerProps> = ({ wins }) => {
 
       {/* Content */}
       <div className="relative flex items-center justify-center gap-2 text-sm font-bold">
-        <span className="text-yellow-400 text-lg">{emojis.left}</span>
+        {currentWin.countryCode && <FlagIcon countryCode={currentWin.countryCode} width="16px" height="12px" />}
         <span className="text-white">{currentWin.winnerWallet}</span>
-        <span className="text-purple-400 text-xs">just won</span>
+        <span className="text-purple-400 text-xs">won</span>
         <span className="text-lime-400 font-black">{currentWin.amount.toFixed(2)} SOL</span>
         <span className="text-gray-500 text-xs ml-1">{timeDisplay}</span>
       </div>

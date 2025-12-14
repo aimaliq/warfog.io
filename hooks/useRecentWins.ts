@@ -6,6 +6,7 @@ export interface RecentWin {
   winnerWallet: string;
   amount: number;
   timestamp: number;
+  countryCode: string | null;
 }
 
 export const useRecentWins = () => {
@@ -23,7 +24,7 @@ export const useRecentWins = () => {
             winner_id,
             wager_amount,
             completed_at,
-            winner:players!matches_winner_id_fkey(wallet_address)
+            winner:players!matches_winner_id_fkey(wallet_address, country_code)
           `)
           .gt('wager_amount', 0)
           .eq('status', 'completed')
@@ -43,7 +44,8 @@ export const useRecentWins = () => {
             id: match.id,
             winnerWallet: formatted,
             amount: match.wager_amount,
-            timestamp: new Date(match.completed_at).getTime()
+            timestamp: new Date(match.completed_at).getTime(),
+            countryCode: match.winner?.country_code || null
           };
         }) || [];
 

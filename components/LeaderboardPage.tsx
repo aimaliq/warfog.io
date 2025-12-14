@@ -49,7 +49,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
           <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-lime-500/70"></div>
 
           {/* Table Header */}
-          <div className="relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 bg-lime-950/30 border-b border-lime-500/30 text-lime-500 font-bold font-mono text-xs tracking-widest">
+          <div className="relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 bg-lime-950/30 border-b border-lime-500/30 text-lime-500 font-bold font-mono text-sm tracking-widest">
             <div className="col-span-1 flex items-center justify-center ml-2">#</div>
             <div className="col-span-1"></div>
             <div className="col-span-1"></div>
@@ -114,8 +114,8 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                       </div>
                     </div>
                     <div className="col-span-5 sm:col-span-4 flex items-center justify-center">
-                      <div className="inline-block bg-black/50 px-2 sm:px-3 py-1 border border-lime-700/50 shadow-[0_0_10px_rgba(0,255,0,0.1)]">
-                        <span className="text-lime-400 font-bold font-mono text-[14px] sm:text-base tracking-wider">
+                      <div className="inline-block bg-black/50 px-2 sm:px-3 py-1">
+                        <span className="text-yellow-400 font-bold font-mono text-[18px] sm:text-base tracking-wider">
                           {entry.totalSolWon.toFixed(2)}
                         </span>
                       </div>

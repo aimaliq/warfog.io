@@ -350,7 +350,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
       <div className="w-full max-w-2xl">
 
         {/* Header */}
-        <h1 className="text-3xl font-black text-lime-500 mb-8">COMMANDER PROFILE</h1>
+        <h1 className="text-3xl font-black text-lime-500 mb-8">PROFILE</h1>
 
         {/* Profile Card */}
         <div className="bg-black/60 p-6 mb-6">
