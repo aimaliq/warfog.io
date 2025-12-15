@@ -372,7 +372,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           {connected && publicKey && (
             <div className="mb-3 space-y-2">
               <div className="border border-lime-700 px-3 py-2 flex justify-between items-center">
-                <span className="text-lime-500 text-center text-2xl font-bold">GAME BALANCE:<br/>{gameBalance.toFixed(2)} SOL</span>
+                <span className="text-center font-bold">
+                  <span className="text-white text-[21px]">GAME BALANCE:</span><br/><br/>
+                  <span className="text-lime-500 text-2xl">{gameBalance.toFixed(2)} SOL</span>
+                </span>
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => {
@@ -664,7 +667,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
             <div className="text-[11px] text-gray-600 mb-2 tracking-widest">RANK</div>
             <div className="flex justify-between items-center">
               <div className="text-3xl text-lime-500 font-black font-mono">
-                {player.isGuest ? '—' : isLoadingRank ? '...' : globalRank ? `#${globalRank}` : '—'}
+                {player.isGuest ? '—' : isLoadingRank ? '#' : globalRank ? `#${globalRank}` : '—'}
               </div>
             </div>
             {player.isGuest && (

@@ -397,10 +397,15 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
             {/* Queue-Based Matchmaking */}
             <div className="space-y-3">
+              {/* Choose Lobby Header */}
+              <div className="text-center mb-3">
+                <h3 className="text-lime-500 font-bold text-lg tracking-widest">CHOOSE LOBBY</h3>
+              </div>
+
               {/* Balance Display */}
               {connected && (
                 <div className="text-left text-md">
-                  <span className="text-gray-500">Game Balance: </span>
+                  <span className="text-gray-200">Game Balance: </span>
                   <span className="text-lime-500 font-bold font-mono">
                     {isLoadingBalance ? '...' : `${gameBalance.toFixed(2)} SOL`}
                   </span>
@@ -408,11 +413,10 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
               )}
 
               {/* Wager Selection + Join Button */}
-              {/* NOTE: Testing with [0.01, 0.05, 0.1] - change to [0.1, 0.5, 1] for production */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <span className="text-lime-500 font-bold text-sm sm:block hidden">SOL</span>
-                <div className="flex gap-2 flex-1 mb-2">
-                  {[0.01, 0.05, 0.1].map(wager => (
+                <div className="flex flex-wrap gap-2 flex-1 mb-2">
+                  {[0.01, 0.05, 0.1, 0.5, 1, 5].map(wager => (
                     <button
                       key={wager}
                       onClick={() => setSelectedBet(wager)}
@@ -427,13 +431,42 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                     </button>
                   ))}
                 </div>
-                <button
-                  onClick={() => handleJoinQueue(selectedBet)}
-                  disabled={!connected || gameBalance < selectedBet || isInBattle || queueStatus === 'queued'}
-                  className="w-full sm:w-auto px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 text-xl font-bold hover:bg-lime-900/60 transition-all text-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
-                >
-                  JOIN SOL BATTLE
-                </button>
+              </div>
+
+              {/* Win Amount Display */}
+              <div className="text-center text-gray-200 text-xl font-bold py-2">
+                Play <span className="text-yellow-400">{selectedBet.toFixed(2)} SOL</span> to WIN <br></br><span className="text-yellow-400 text-2xl">{(selectedBet * 1.9).toFixed(3)} SOL</span>!
+              </div>
+
+              {/* Join Button */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="btn-snake-wrapper w-full sm:w-auto">
+                  <svg xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
+                        <stop offset="30%" style={{ stopColor: '#84cc16', stopOpacity: 0.3 }} />
+                        <stop offset="70%" style={{ stopColor: '#a3e635', stopOpacity: 0.5 }} />
+                        <stop offset="100%" style={{ stopColor: '#84cc16', stopOpacity: 1 }} />
+                      </linearGradient>
+                      <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
+                        <stop offset="30%" style={{ stopColor: '#65a30d', stopOpacity: 0.3 }} />
+                        <stop offset="70%" style={{ stopColor: '#84cc16', stopOpacity: 0.5 }} />
+                        <stop offset="100%" style={{ stopColor: '#65a30d', stopOpacity: 1 }} />
+                      </linearGradient>
+                    </defs>
+                    <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
+                    <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
+                  </svg>
+                  <button
+                    onClick={() => handleJoinQueue(selectedBet)}
+                    disabled={!connected || gameBalance < selectedBet || isInBattle || queueStatus === 'queued'}
+                    className="w-full px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
+                  >
+                    JOIN SOL BATTLE
+                  </button>
+                </div>
               </div>
 
               {!connected && (
@@ -487,14 +520,12 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   CANCEL
                 </button>
               </div>
-            ) : (
-              <div className="text-center text-gray-600 text-xs py-2">Select a bet to join matchmaking</div>
-            )}
+            ) : null}
           </div>
         </div>
 
         {/* Activity Feed */}
-        <div className="bg-black/60 mt-4">
+        <div className="bg-black/60 mt-3">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10">
             <h2 className="text-lime-500 font-bold text-md tracking-widest">ACTIVITY</h2>
           </div>
@@ -631,13 +662,13 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 return (
                   <div
                     key={win.id}
-                    className="flex items-center gap-2 py-2 px-3 hover:bg-gray-900/20 transition-all text-xs font-bold border-b border-gray-700/20 last:border-b-0"
+                    className="flex items-center gap-2 py-2 px-3 hover:bg-gray-900/20 transition-all text-sm font-bold border-b border-gray-700/20 last:border-b-0"
                   >
                     {win.countryCode && <FlagIcon countryCode={win.countryCode} width="16px" height="12px" />}
-                    <span className="text-white">{win.winnerWallet}</span>
-                    <span className="text-purple-400">won</span>
+                    <span className="text-white text-xs">{win.winnerWallet}</span>
+                    <span className="text-purple-400 text-xs">just won</span>
                     <span className="text-lime-400 font-black">{win.amount.toFixed(2)} SOL</span>
-                    <span className="text-gray-500 ml-1">{timeDisplay}</span>
+                    <span className="text-gray-500 text-xs ml-1">{timeDisplay}</span>
                   </div>
                 );
               })

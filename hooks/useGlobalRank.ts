@@ -15,14 +15,14 @@ export const useGlobalRank = (playerId?: string, walletAddress?: string) => {
       }
 
       try {
-        // Get all registered players ordered by game balance (descending), then created_at (ascending)
+        // Get all registered players ordered by total SOL won (descending), then created_at (ascending)
         // This matches the leaderboard ranking logic
         const { data: allPlayers, error } = await supabase
           .from('players')
-          .select('id, wallet_address, game_balance, created_at, is_guest')
+          .select('id, wallet_address, total_sol_won, created_at, is_guest')
           .eq('is_guest', false) // Only registered wallets
           .not('wallet_address', 'is', null) // Exclude null wallet addresses
-          .order('game_balance', { ascending: false }) // Primary sort: SOL balance
+          .order('total_sol_won', { ascending: false }) // Primary sort: Total SOL won
           .order('created_at', { ascending: true }); // Secondary sort: registration date
 
         if (error) throw error;

@@ -24,7 +24,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, onChange, isI
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-black/90 border-t border-lime-900 backdrop-blur-md z-40 pb-safe">
+    <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-lime-900 backdrop-blur-md z-40 pb-safe">
       <div className="flex justify-around items-center h-16 max-w-md mx-auto">
         {navItems.map((item) => (
           <button
@@ -32,10 +32,10 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, onChange, isI
             onClick={() => handleNavClick(item.id)}
             className={`flex flex-col items-center justify-center w-full h-full transition-colors ${
               isInMatch
-                ? 'text-gray-600 hover:text-gray-400'
+                ? 'text-gray-500 hover:text-gray-400'
                 : activeTab === item.id
                   ? 'text-lime-500'
-                  : 'text-gray-600 hover:text-gray-400'
+                  : 'text-gray-400 hover:text-gray-300'
             }`}
           >
             <span className="material-icons-outlined text-2xl mb-1">{item.icon}</span>
