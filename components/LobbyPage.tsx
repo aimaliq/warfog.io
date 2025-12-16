@@ -389,7 +389,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
-                {isLoading ? '0' : onlineCount} Playing
+                {isLoading ? '13' : ((onlineCount || 0) + 13)} Playing
               </span>
             </div>
           </div>
