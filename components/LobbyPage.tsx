@@ -439,7 +439,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
               </div>
 
               {/* Join Button */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
                 <div className="btn-snake-wrapper w-full sm:w-auto">
                   <svg xmlns="http://www.w3.org/2000/svg">
                     <defs>

@@ -308,7 +308,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
 
     const sendHeartbeat = async () => {
       try {
-        await fetch('http://localhost:3003/api/game/heartbeat', {
+        await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/game/heartbeat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -336,7 +336,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
 
     const checkResignation = async () => {
       try {
-        const response = await fetch(`http://localhost:3003/api/game/state/${matchId}`);
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/game/state/${matchId}`);
         const data = await response.json();
 
         if (data.resignation) {
@@ -352,7 +352,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
           // Trigger settlement for wagered match
           if (data.match.wager_amount && data.match.wager_amount > 0 && data.resignation.winnerId) {
             console.log(`💰 Settling wagered match after resignation: ${matchId}`);
-            fetch('http://localhost:3003/api/match/settle', {
+            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -388,7 +388,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
 
     const pollGameState = async () => {
       try {
-        const response = await fetch(`http://localhost:3003/api/game/state/${matchId}`);
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/game/state/${matchId}`);
         const data = await response.json();
 
         if (!data.gameState || !data.match) {
@@ -416,7 +416,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
           // Trigger settlement for wagered match
           if (match.wager_amount && match.wager_amount > 0 && resignation.winnerId) {
             console.log(`💰 Settling wagered match after resignation: ${matchId}`);
-            fetch('http://localhost:3003/api/match/settle', {
+            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -589,7 +589,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
             // Call settlement endpoint if this is a wagered match
             if (match.wager_amount && match.wager_amount > 0 && match.winner_id) {
               console.log(`💰 Settling wagered match: ${matchId}`);
-              fetch('http://localhost:3003/api/match/settle', {
+              fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1222,7 +1222,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
       // Store moves for later animation
       setSubmittedMoves({ defenses: selectedDefenses, attacks: selectedTargets });
 
-      const response = await fetch('http://localhost:3003/api/game/submit-turn', {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/game/submit-turn`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1487,7 +1487,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                    <button
                       onClick={async () => {
                         try {
-                          const response = await fetch('http://localhost:3003/api/rematch/request', {
+                          const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/rematch/request`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1527,7 +1527,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                             // Poll for status using dedicated status endpoint
                             const pollInterval = setInterval(async () => {
                               try {
-                                const checkResponse = await fetch(`http://localhost:3003/api/rematch/status/${matchId}/${player.id}`);
+                                const checkResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/rematch/status/${matchId}/${player.id}`);
                                 const checkData = await checkResponse.json();
 
                                 if (checkData.status === 'accepted' && checkData.newMatchId) {
@@ -1542,7 +1542,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                                   }, 1000);
                                 } else if (checkData.status === 'pending') {
                                   // Opponent wants rematch! Accept it
-                                  const acceptResponse = await fetch('http://localhost:3003/api/rematch/request', {
+                                  const acceptResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/rematch/request`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
