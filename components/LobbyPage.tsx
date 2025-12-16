@@ -253,6 +253,32 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     }
   };
 
+  // 1. Simulate fake activity for launch
+  const [fPlayers, setFPlayers] = useState(8);
+
+  // 2. Simulate traffic between 4 and 12
+  useEffect(() => {
+    const getRandom = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    
+    setFPlayers(getRandom(4, 12));
+
+    const interval = setInterval(() => {
+      setFPlayers(prev => {
+        // Randomly add -1, 0, or +1
+        const change = getRandom(-1, 1);
+        let newValue = prev + change;
+        
+        // Force it to stay within 4 and 12
+        if (newValue < 4) newValue = 4;
+        if (newValue > 12) newValue = 12;
+        
+        return newValue;
+      });
+    }, 5000); // Updates every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+  
   return (
     <div className="flex flex-col items-center px-4 py-8">
       <div className="w-full max-w-2xl">
@@ -389,7 +415,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
-                {isLoading ? '13' : ((onlineCount || 0) + 13)} Playing
+                {isLoading ? fPlayers : ((onlineCount || 0) + fPlayers)} Playing
               </span>
             </div>
           </div>
