@@ -59,6 +59,39 @@ const SOLANA_RPC_URL = process.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.so
 console.log('🌐 Network:', SOLANA_NETWORK);
 console.log('🔗 RPC URL:', SOLANA_RPC_URL);
 
+// ==============================================
+// ERROR LOGGING UTILITY
+// ==============================================
+
+/**
+ * Log critical errors to database for admin monitoring
+ * @param {Object} params
+ * @param {string} params.errorType - 'withdrawal', 'settlement', 'database', 'matchmaking'
+ * @param {string} params.errorMessage - Error message
+ * @param {string} params.errorStack - Error stack trace
+ * @param {Object} params.context - Additional context (player_id, match_id, amount, etc.)
+ */
+async function logCriticalError({ errorType, errorMessage, errorStack, context = {} }) {
+  try {
+    await supabase.from('error_logs').insert({
+      error_type: errorType,
+      severity: 'CRITICAL',
+      error_message: errorMessage,
+      error_stack: errorStack,
+      context: context
+    });
+    console.error(`[CRITICAL ERROR] ${errorType}: ${errorMessage}`);
+  } catch (logError) {
+    // If logging fails, at least console.error it
+    console.error('Failed to log critical error:', logError);
+    console.error('Original error:', errorMessage);
+  }
+}
+
+// ==============================================
+// API ENDPOINTS
+// ==============================================
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -216,6 +249,19 @@ app.post('/api/withdraw', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Withdrawal error:', error);
+
+    // Log critical error to database
+    await logCriticalError({
+      errorType: 'withdrawal',
+      errorMessage: error.message || 'Failed to process withdrawal',
+      errorStack: error.stack,
+      context: {
+        playerWallet: req.body.playerWallet,
+        amount: req.body.amount,
+        playerId: req.body.playerId
+      }
+    });
+
     res.status(500).json({
       error: error.message || 'Failed to process withdrawal'
     });
@@ -343,6 +389,18 @@ app.post('/api/match/settle', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Match settlement error:', error);
+
+    // Log critical error to database
+    await logCriticalError({
+      errorType: 'settlement',
+      errorMessage: error.message || 'Failed to settle match',
+      errorStack: error.stack,
+      context: {
+        matchId: req.body.matchId,
+        winnerId: req.body.winnerId
+      }
+    });
+
     res.status(500).json({
       error: error.message || 'Failed to settle match'
     });
@@ -454,6 +512,17 @@ app.post('/api/fees/collect', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Fee collection error:', error);
+
+    // Log critical error to database
+    await logCriticalError({
+      errorType: 'withdrawal',
+      errorMessage: error.message || 'Failed to collect platform fees',
+      errorStack: error.stack,
+      context: {
+        attemptedAmount: req.body.amount || 'auto-collection'
+      }
+    });
+
     res.status(500).json({
       error: error.message || 'Failed to collect platform fees'
     });
@@ -843,7 +912,7 @@ setInterval(async () => {
 // Submit player's turn (defenses + attacks)
 app.post('/api/game/submit-turn', async (req, res) => {
   try {
-    const { matchId, playerId, defenses, attacks } = req.body;
+    const { matchId, playerId, defenses, attacks, siloHP, pendingHP } = req.body;
 
     // Validate input
     if (!matchId || !playerId || !defenses || !attacks) {
@@ -852,6 +921,9 @@ app.post('/api/game/submit-turn', async (req, res) => {
 
     console.log(`🎯 Player ${playerId.slice(0, 8)}... submitted turn for match ${matchId}`);
     console.log(`   Defenses: [${defenses}], Attacks: [${attacks}]`);
+    if (siloHP) {
+      console.log(`   Silo HP: [${siloHP}], Pending HP: ${pendingHP || 0}`);
+    }
 
     // Get current game state
     const { data: gameState, error: gameError } = await supabase
@@ -885,11 +957,15 @@ app.post('/api/game/submit-turn', async (req, res) => {
       player1_defenses: defenses,
       player1_attacks: attacks,
       player1_ready: true,
+      ...(siloHP && { player1_silos: siloHP }), // Update silo HP if provided (HP allocation)
+      ...(pendingHP !== undefined && { player1_pending_hp: pendingHP }), // Update pending HP
       ...(isFirstMoveOfTurn && { turn_started_at: new Date().toISOString() })
     } : {
       player2_defenses: defenses,
       player2_attacks: attacks,
       player2_ready: true,
+      ...(siloHP && { player2_silos: siloHP }), // Update silo HP if provided (HP allocation)
+      ...(pendingHP !== undefined && { player2_pending_hp: pendingHP }), // Update pending HP
       ...(isFirstMoveOfTurn && { turn_started_at: new Date().toISOString() })
     };
 
@@ -928,6 +1004,10 @@ app.post('/api/game/submit-turn', async (req, res) => {
       let p1Silos = [...updatedState.player1_silos];
       let p2Silos = [...updatedState.player2_silos];
 
+      // Track silos destroyed BEFORE damage
+      const p1DestroyedBefore = p1Silos.filter(hp => hp <= 0).length;
+      const p2DestroyedBefore = p2Silos.filter(hp => hp <= 0).length;
+
       // Player 2 takes damage from Player 1's undefended attacks
       for (const attackTarget of p1Attacks) {
         if (!p2Defenses.includes(attackTarget) && p2Silos[attackTarget] > 0) {
@@ -947,6 +1027,23 @@ app.post('/api/game/submit-turn', async (req, res) => {
       // Check for game over - game ends when a player loses 3 silos
       const p1DestroyedCount = p1Silos.filter(hp => hp <= 0).length;
       const p2DestroyedCount = p2Silos.filter(hp => hp <= 0).length;
+
+      // Calculate how many silos were destroyed THIS TURN (for HP rewards)
+      const p1SilosDestroyedThisTurn = p1DestroyedCount - p1DestroyedBefore;
+      const p2SilosDestroyedThisTurn = p2DestroyedCount - p2DestroyedBefore;
+
+      // Award pending HP to the destroyer
+      // P1 destroyed P2 silos → P1 gets HP
+      // P2 destroyed P1 silos → P2 gets HP
+      const p1PendingHP = (updatedState.player1_pending_hp || 0) + p2SilosDestroyedThisTurn;
+      const p2PendingHP = (updatedState.player2_pending_hp || 0) + p1SilosDestroyedThisTurn;
+
+      if (p2SilosDestroyedThisTurn > 0) {
+        console.log(`   🎁 P1 destroyed ${p2SilosDestroyedThisTurn} enemy silo(s) → awarded ${p2SilosDestroyedThisTurn} pending HP`);
+      }
+      if (p1SilosDestroyedThisTurn > 0) {
+        console.log(`   🎁 P2 destroyed ${p1SilosDestroyedThisTurn} enemy silo(s) → awarded ${p1SilosDestroyedThisTurn} pending HP`);
+      }
 
       let winnerId = null;
       let matchStatus = 'active';
@@ -982,6 +1079,8 @@ app.post('/api/game/submit-turn', async (req, res) => {
         .update({
           player1_silos: p1Silos,
           player2_silos: p2Silos,
+          player1_pending_hp: p1PendingHP,
+          player2_pending_hp: p2PendingHP,
           current_turn: updatedState.current_turn + 1,
           player1_ready: false,
           player2_ready: false,
@@ -1390,6 +1489,248 @@ app.get('/api/rematch/status/:matchId/:playerId', (req, res) => {
   }
 
   res.json({ status: 'none' });
+});
+
+// ==============================================
+// ADMIN ENDPOINTS (Protected by secret path)
+// ==============================================
+
+// Admin stats dashboard endpoint
+app.get('/api/admin/:secretPath/stats', async (req, res) => {
+  try {
+    const { secretPath } = req.params;
+
+    // Validate secret path
+    if (secretPath !== process.env.ADMIN_SECRET_PATH) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // 1. Total registered users (non-guest)
+    const { count: totalUsers } = await supabase
+      .from('players')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_guest', false)
+      .not('wallet_address', 'is', null);
+
+    // 2. Users currently online (last 5 minutes)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { count: onlineUsers } = await supabase
+      .from('players')
+      .select('*', { count: 'exact', head: true })
+      .gte('last_played_at', fiveMinutesAgo);
+
+    // 3. Battles today (matches created in last 24h)
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: battlesCreated } = await supabase
+      .from('matches')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', twentyFourHoursAgo);
+
+    const { count: battlesCompleted } = await supabase
+      .from('matches')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'completed')
+      .gte('completed_at', twentyFourHoursAgo);
+
+    // 4. SOL moved today (sum of wager_amount * 2 for completed matches)
+    const { data: completedMatches } = await supabase
+      .from('matches')
+      .select('wager_amount')
+      .eq('status', 'completed')
+      .gte('completed_at', twentyFourHoursAgo);
+
+    const solMovedToday = completedMatches?.reduce((sum, match) =>
+      sum + (parseFloat(match.wager_amount) * 2), 0) || 0;
+
+    // 5. Platform fees accumulated
+    const { data: platformFees } = await supabase
+      .rpc('get_platform_fees');
+
+    // 6. Treasury wallet balance
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const treasuryBalance = await connection.getBalance(treasuryKeypair.publicKey);
+
+    // 7. Active matches count
+    const { count: activeMatches } = await supabase
+      .from('matches')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active');
+
+    // 8. Queue depth
+    const { count: queueDepth } = await supabase
+      .from('matchmaking_queue')
+      .select('*', { count: 'exact', head: true });
+
+    // 9. Recent critical errors (last 10)
+    const { data: recentErrors } = await supabase
+      .from('error_logs')
+      .select('*')
+      .eq('severity', 'CRITICAL')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      stats: {
+        totalRegisteredUsers: totalUsers || 0,
+        onlineUsers: onlineUsers || 0,
+        battlesToday: {
+          created: battlesCreated || 0,
+          completed: battlesCompleted || 0
+        },
+        solMovedToday: solMovedToday.toFixed(4),
+        platformFeesAccumulated: parseFloat(platformFees || 0).toFixed(4),
+        treasuryBalance: {
+          sol: (treasuryBalance / LAMPORTS_PER_SOL).toFixed(4),
+          lamports: treasuryBalance
+        },
+        activeMatches: activeMatches || 0,
+        queueDepth: queueDepth || 0
+      },
+      recentErrors: recentErrors || []
+    });
+
+  } catch (error) {
+    console.error('Admin stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch admin stats' });
+  }
+});
+
+// Manual fee collection endpoint (protected)
+app.post('/api/admin/:secretPath/fees/collect', async (req, res) => {
+  try {
+    const { secretPath } = req.params;
+
+    if (secretPath !== process.env.ADMIN_SECRET_PATH) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Get platform wallet from env
+    const platformWallet = process.env.VITE_PLATFORM_WALLET;
+
+    if (!platformWallet) {
+      return res.status(500).json({ error: 'Platform wallet not configured' });
+    }
+
+    // Check accumulated fees
+    const { data: platformFees } = await supabase.rpc('get_platform_fees');
+    const feesAccumulated = parseFloat(platformFees || 0);
+
+    console.log(`💰 Manual fee collection requested. Accumulated: ${feesAccumulated} SOL`);
+
+    if (feesAccumulated < 0.01) {
+      return res.status(400).json({
+        error: 'Insufficient fees to collect',
+        accumulated: feesAccumulated
+      });
+    }
+
+    // Create connection
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+
+    // Check treasury balance
+    const treasuryBalance = await connection.getBalance(treasuryKeypair.publicKey);
+    const requiredLamports = Math.floor(feesAccumulated * LAMPORTS_PER_SOL);
+    const estimatedFee = 5000;
+
+    if (treasuryBalance < requiredLamports + estimatedFee) {
+      return res.status(500).json({
+        error: 'Insufficient treasury balance',
+        treasuryBalance: treasuryBalance / LAMPORTS_PER_SOL,
+        required: feesAccumulated
+      });
+    }
+
+    // Create transfer transaction
+    const recipientPubkey = new PublicKey(platformWallet);
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: treasuryKeypair.publicKey,
+        toPubkey: recipientPubkey,
+        lamports: requiredLamports,
+      })
+    );
+
+    // Get latest blockhash
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = treasuryKeypair.publicKey;
+
+    // Sign and send transaction
+    transaction.sign(treasuryKeypair);
+    const signature = await connection.sendRawTransaction(transaction.serialize());
+
+    console.log(`📤 Fee collection initiated: ${signature}`);
+    console.log(`   Amount: ${feesAccumulated} SOL`);
+    console.log(`   To: ${platformWallet}`);
+
+    // Wait for confirmation
+    const confirmation = await connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight
+    }, 'confirmed');
+
+    if (confirmation.value.err) {
+      throw new Error('Transaction failed: ' + JSON.stringify(confirmation.value.err));
+    }
+
+    console.log(`✅ Fee collection confirmed: ${signature}`);
+
+    // Reset platform fees in database
+    await supabase.rpc('reset_platform_fees');
+
+    const clusterParam = SOLANA_NETWORK === 'mainnet-beta' ? '' : `?cluster=${SOLANA_NETWORK}`;
+
+    res.json({
+      success: true,
+      signature,
+      amount: feesAccumulated,
+      recipient: platformWallet,
+      explorerUrl: `https://explorer.solana.com/tx/${signature}${clusterParam}`
+    });
+
+  } catch (error) {
+    console.error('❌ Manual fee collection error:', error);
+
+    await logCriticalError({
+      errorType: 'withdrawal',
+      errorMessage: error.message || 'Failed to collect platform fees (manual)',
+      errorStack: error.stack,
+      context: {
+        manual: true
+      }
+    });
+
+    res.status(500).json({
+      error: error.message || 'Failed to collect platform fees'
+    });
+  }
+});
+
+// Error logs endpoint (protected)
+app.get('/api/admin/:secretPath/errors', async (req, res) => {
+  try {
+    const { secretPath } = req.params;
+    const { limit = 50 } = req.query;
+
+    if (secretPath !== process.env.ADMIN_SECRET_PATH) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { data: errors } = await supabase
+      .from('error_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(parseInt(limit));
+
+    res.json({ success: true, errors: errors || [] });
+
+  } catch (error) {
+    console.error('Error logs fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch error logs' });
+  }
 });
 
 const PORT = process.env.PORT || 3003;

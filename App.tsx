@@ -6,6 +6,7 @@ import { LobbyPage } from './components/LobbyPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { ProfilePage } from './components/ProfilePage';
 import { TermsPage } from './components/TermsPage';
+import { AdminStatusPage } from './components/AdminStatusPage';
 import { usePlayer } from './hooks/usePlayer';
 import { updateLastPlayedAt } from './lib/supabase';
 
@@ -75,6 +76,7 @@ export default function App() {
   const { player: dbPlayer, isLoading } = usePlayer();
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [activeTab, setActiveTab] = useState('lobby');
+  const [showAdmin, setShowAdmin] = useState(false);
   const [matches, setMatches] = useState<any[]>([]);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
 
@@ -111,6 +113,25 @@ export default function App() {
       });
     }
   }, [dbPlayer]);
+
+  // Check for admin access via URL hash
+  useEffect(() => {
+    const checkAdminAccess = () => {
+      const hash = window.location.hash.slice(1); // Remove '#'
+      const secretPath = import.meta.env.VITE_ADMIN_SECRET_PATH || '';
+
+      if (hash === secretPath && secretPath) {
+        setShowAdmin(true);
+        // Clear hash to hide the secret
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    };
+
+    checkAdminAccess();
+    window.addEventListener('hashchange', checkAdminAccess);
+
+    return () => window.removeEventListener('hashchange', checkAdminAccess);
+  }, []);
 
   // Pause music during battles, resume in lobby
   useEffect(() => {
@@ -212,6 +233,11 @@ export default function App() {
   };
 
   const renderContent = () => {
+    // Admin dashboard takes precedence over everything
+    if (showAdmin) {
+      return <AdminStatusPage onClose={() => setShowAdmin(false)} />;
+    }
+
     // During gameplay, always show battle screen regardless of tab
     if (gameState.phase !== GamePhase.LOBBY) {
       return <BattleScreen gameState={gameState} setGameState={setGameState} matchId={currentMatchId} />;

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, GamePhase, Base, Player } from '../types';
 import { FlagIcon } from './FlagIcon';
-import { ShareVictory } from './ShareVictory';
 import { supabase, updateLastPlayedAt } from '../lib/supabase';
 
 // Helper to create fresh bases
@@ -220,7 +219,6 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
   // Turn synchronization state
   const [waitingForOpponent, setWaitingForOpponent] = useState(false);
   const [lastTurnResolvedAt, setLastTurnResolvedAt] = useState<string | null>(null);
-  const [submittedMoves, setSubmittedMoves] = useState<{defenses: number[], attacks: number[]} | null>(null);
 
   // Rematch state
   const [rematchCountdown, setRematchCountdown] = useState(0);
@@ -403,9 +401,6 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
           console.log('🏳️ Opponent resigned!');
           setWaitingForOpponent(false);
 
-          // Determine if current player won
-          const isWinner = resignation.winnerId === player.id;
-
           setGameState(current => ({
             ...current,
             phase: GamePhase.GAME_OVER,
@@ -471,10 +466,12 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
     const playerSilos = isPlayer1 ? serverState.player1_silos : serverState.player2_silos;
     const enemySilos = isPlayer1 ? serverState.player2_silos : serverState.player1_silos;
 
+    // Get pending HP from server
+    const playerPendingHP = isPlayer1 ? (serverState.player1_pending_hp || 0) : (serverState.player2_pending_hp || 0);
+    const enemyPendingHP = isPlayer1 ? (serverState.player2_pending_hp || 0) : (serverState.player1_pending_hp || 0);
+
     // Get the moves that were submitted
-    const playerDefenses = isPlayer1 ? serverState.player1_defenses : serverState.player2_defenses;
     const playerAttacks = isPlayer1 ? serverState.player1_attacks : serverState.player2_attacks;
-    const enemyDefenses = isPlayer1 ? serverState.player2_defenses : serverState.player1_defenses;
     const enemyAttacks = isPlayer1 ? serverState.player2_attacks : serverState.player1_attacks;
 
     // Show missiles animation
@@ -533,14 +530,14 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
             bases: newPlayerBases,
             basesDestroyed: playerDestroyed,
             totalHP: playerTotalHP,
-            pendingHP: 0 // Reset pending HP
+            pendingHP: playerPendingHP // Set from server
           },
           player2: {
             ...current.player2,
             bases: newEnemyBases,
             basesDestroyed: enemyDestroyed,
             totalHP: enemyTotalHP,
-            pendingHP: 0
+            pendingHP: enemyPendingHP // Set from server
           },
           phase: GamePhase.RESOLVING,
           currentTurn: serverState.current_turn
@@ -698,7 +695,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
       // Check if player has HP to allocate
       if (player.pendingHP > 0) {
         setIsAllocatingHP(true);
-        setMessage(`ALLOCATE +${player.pendingHP} HP - TAP A SILO`);
+        setMessage(`TAP SILO TO ALLOCATE +${player.pendingHP} HP`);
       } else {
         setIsAllocatingHP(false);
         setMessage("TAP SILOS TO DEFEND & ATTACK");
@@ -1219,9 +1216,6 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
       setMessage("TRANSMITTING STRIKE COORDINATES...");
       setGameState(prev => ({ ...prev, phase: GamePhase.RESOLVING }));
 
-      // Store moves for later animation
-      setSubmittedMoves({ defenses: selectedDefenses, attacks: selectedTargets });
-
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/game/submit-turn`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1229,7 +1223,9 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
           matchId,
           playerId: player.id,
           defenses: selectedDefenses,
-          attacks: selectedTargets
+          attacks: selectedTargets,
+          siloHP: player.bases.map(b => b.hp), // Send current silo HP (includes allocations)
+          pendingHP: player.pendingHP // Send remaining pending HP
         })
       });
 
