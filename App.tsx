@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { GameState, GamePhase, Player, Base } from './types';
 import BattleScreen from './components/BattleScreen';
 import { Navigation } from './components/Navigation';
@@ -305,6 +306,8 @@ export default function App() {
         isInMatch={gameState.phase !== GamePhase.LOBBY}
         onForfeit={handleForfeit}
       />
+
+      <Analytics />
     </div>
   );
 }
