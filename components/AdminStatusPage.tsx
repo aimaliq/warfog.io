@@ -117,7 +117,7 @@ export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => 
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-lime-500 font-mono p-6 overflow-y-auto pb-24">
+    <div className="min-h-screen bg-gray-950 text-lime-500 font-mono p-6 overflow-y-auto pb-24 lg:ml-64">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>

@@ -346,7 +346,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
   };
 
   return (
-    <div className="flex flex-col items-center px-4 py-8">
+    <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
       <div className="w-full max-w-2xl">
 
         {/* Header */}
@@ -659,12 +659,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         {/* Stats Grid */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">BATTLES</div>
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">BATTLES</div>
             <div className="text-3xl text-lime-500 font-black font-mono">{player.gamesPlayed}</div>
           </div>
 
           <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-600 mb-2 tracking-widest">RANK</div>
+            <div className="text-[11px] text-gray-400 mb-2 tracking-widest">RANK</div>
             <div className="flex justify-between items-center">
               <div className="text-3xl text-lime-500 font-black font-mono">
                 {player.isGuest ? '—' : isLoadingRank ? '#' : globalRank ? `#${globalRank}` : '—'}
@@ -679,23 +679,23 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           </div>
 
           <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">DEFEATS</div>
-            <div className="text-3xl text-orange-500 font-black font-mono">{player.losses}</div>
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">SOL WON</div>
+            <div className="text-3xl text-lime-500 font-black font-mono">{(player.totalSolWon || 0).toFixed(2)}</div>
           </div>
 
           <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">WIN RATE</div>
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">WIN RATE</div>
             <div className="text-3xl text-lime-500 font-black font-mono">{winRate}%</div>
           </div>
 
           <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-600 mb-1 tracking-widest">VICTORIES</div>
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">VICTORIES</div>
             <div className="text-3xl text-lime-500 font-black font-mono">{player.wins}</div>
           </div>
 
           <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-600 mb-2 tracking-widest flex items-center gap-1">
-              <span className="material-icons-outlined text-xs text-gray-600">local_fire_department</span>
+            <div className="text-[11px] text-gray-400 mb-2 tracking-widest flex items-center gap-1">
+              <span className="material-icons-outlined text-xs text-gray-400">local_fire_department</span>
               STREAK
             </div>
             <div className="text-3xl text-lime-500 font-black font-mono">
@@ -772,7 +772,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         <div className="mt-6 text-center">
           <button
             onClick={onNavigateToTerms}
-            className="text-lime-500 hover:text-lime-400 transition-colors text-sm"
+            className="text-lime-500 hover:text-lime-400 transition-colors text-xs"
           >
             Terms of Service
           </button>

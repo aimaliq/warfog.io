@@ -258,7 +258,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
   // 2. Simulate traffic between 4 and 12
   useEffect(() => {
-    const getRandom = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const getRandom = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
     
     setFPlayers(getRandom(4, 12));
 
@@ -280,13 +280,13 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   }, []);
   
   return (
-    <div className="flex flex-col items-center px-4 py-8">
+    <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
       <div className="w-full max-w-2xl">
 
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="text-3xl font-black text-lime-500 animate-pulse">WARFOG.IO</h1>
-          <WalletButton className="wallet-custom" />
+          <h1 className="lg:hidden text-3xl font-black text-lime-500 animate-pulse">WARFOG.IO</h1>
+          <WalletButton className="wallet-custom lg:ml-auto" />
         </div>
       
 
@@ -398,7 +398,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                     disabled={isInBattle}
                     className="w-full py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
                   >
-                    JOIN FREE BATTLE
+                    PLAY FREE BATTLE
                   </button>
                 </div>
             </div>
@@ -490,7 +490,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                     disabled={!connected || gameBalance < selectedBet || isInBattle || queueStatus === 'queued'}
                     className="w-full px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
                   >
-                    JOIN SOL BATTLE
+                    SEARCH OPPONENT
                   </button>
                 </div>
               </div>

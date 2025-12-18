@@ -33,6 +33,7 @@ export interface Player {
   winRate: number;
   currentStreak: number; // Current win streak counter
   longestStreak: number; // Longest win streak achieved
+  totalSolWon?: number; // Total SOL won from matches (optional, from database)
 }
 
 export enum GamePhase {

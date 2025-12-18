@@ -1271,7 +1271,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
   // Matchmaking Transition Screen
   if (gameState.phase === GamePhase.MATCHMAKING) {
     return (
-      <div className="flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative overflow-hidden" style={{ minHeight: 'calc(100vh - 80px)' }}>
+      <div className="flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative overflow-hidden lg:ml-64" style={{ minHeight: 'calc(100vh - 80px)' }}>
 
         {/* Enemy Section - Slide Down */}
         <div className="w-full flex flex-col gap-2 animate-slide-down">
@@ -1378,7 +1378,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
      const isResignation = gameState.winReason === 'OPPONENT_FORFEIT';
 
      return (
-         <div className="flex flex-col items-center justify-center min-h-screen animate-pulse z-50 relative w-full px-4">
+         <div className="flex flex-col items-center justify-center min-h-screen animate-pulse z-50 relative w-full px-4 lg:ml-64">
              <h1 className={`text-5xl font-black mb-8 text-center ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
                  {isDraw ? 'TACTICAL STALEMATE' : isWin ? (isResignation ? 'OPPONENT RESIGNED' : 'TARGET DESTROYED') : 'MISSION FAILED'}
              </h1>
@@ -1608,7 +1608,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
   }
 
   return (
-    <div className={`flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative ${shake ? 'animate-screen-shake' : ''}`} style={{ minHeight: 'calc(100vh - 80px)' }}>
+    <div className={`flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative lg:ml-64 ${shake ? 'animate-screen-shake' : ''}`} style={{ minHeight: 'calc(100vh - 80px)' }}>
 
       {/* --- TOP SECTION: ENEMY --- */}
       <div className="w-full flex flex-col gap-2">

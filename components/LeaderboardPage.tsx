@@ -13,7 +13,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
   const { leaderboard, isLoading } = useLeaderboard();
   const changes = useLeaderboardChanges(leaderboard);
   return (
-    <div className="flex flex-col items-center px-4 py-8">
+    <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
       <div className="w-full max-w-4xl">
 
         {/* Header */}
