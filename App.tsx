@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { GameState, GamePhase, Player, Base } from './types';
 import BattleScreen from './components/BattleScreen';
 import { Navigation } from './components/Navigation';
-import { LobbyPage } from './components/LobbyPage';
+import { PlayPage } from './components/PlayPage';
+import { SOLBattlesPage } from './components/SOLBattlesPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { ProfilePage } from './components/ProfilePage';
 import { TermsPage } from './components/TermsPage';
@@ -36,6 +37,7 @@ const INITIAL_PLAYER: Player = {
   winRate: 0,
   currentStreak: 0,
   longestStreak: 0,
+  rating: 500,
 };
 
 const INITIAL_ENEMY: Player = {
@@ -55,6 +57,7 @@ const INITIAL_ENEMY: Player = {
   winRate: 0,
   currentStreak: 0,
   longestStreak: 0,
+  rating: 500,
 };
 
 const INITIAL_GAME_STATE: GameState = {
@@ -75,9 +78,8 @@ const INITIAL_GAME_STATE: GameState = {
 export default function App() {
   const { player: dbPlayer, isLoading } = usePlayer();
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
-  const [activeTab, setActiveTab] = useState('lobby');
+  const [activeTab, setActiveTab] = useState('play');
   const [showAdmin, setShowAdmin] = useState(false);
-  const [matches, setMatches] = useState<any[]>([]);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
 
   // Audio ref for lobby music
@@ -167,6 +169,7 @@ export default function App() {
             : 0,
           currentStreak: dbPlayer.current_streak,
           longestStreak: dbPlayer.best_streak,
+          rating: dbPlayer.rating || 500,
         }
       }));
 
@@ -244,16 +247,26 @@ export default function App() {
     }
 
     // In lobby, show content based on active tab
-    if (activeTab === 'lobby') {
+    if (activeTab === 'play') {
       return (
-        <LobbyPage
+        <PlayPage
           player={gameState.player1}
           onStartBattle={(matchId?: string) => {
             setCurrentMatchId(matchId || null);
             setGameState({ ...gameState, phase: GamePhase.MATCHMAKING });
           }}
-          matches={matches}
-          onMatchesChange={setMatches}
+          onPlayerUpdate={handlePlayerUpdate}
+          isInBattle={gameState.phase !== GamePhase.LOBBY}
+        />
+      );
+    } else if (activeTab === 'sol') {
+      return (
+        <SOLBattlesPage
+          player={gameState.player1}
+          onStartBattle={(matchId?: string) => {
+            setCurrentMatchId(matchId || null);
+            setGameState({ ...gameState, phase: GamePhase.MATCHMAKING });
+          }}
           isInBattle={gameState.phase !== GamePhase.LOBBY}
         />
       );
@@ -288,7 +301,7 @@ export default function App() {
     <div className="h-screen bg-terminal-bg text-terminal-green font-mono relative flex flex-col overflow-hidden">
       {/* Background Grid Effect */}
       <div
-        className="absolute inset-0 opacity-5 pointer-events-none"
+        className="absolute inset-0 opacity-5 pointer-events-none grid-scroll-overlay"
         style={{
           backgroundImage: 'linear-gradient(#a3e635 1px, transparent 1px), linear-gradient(90deg, #a3e635 1px, transparent 1px)',
           backgroundSize: '40px 40px'

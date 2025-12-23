@@ -34,6 +34,7 @@ export interface Player {
   currentStreak: number; // Current win streak counter
   longestStreak: number; // Longest win streak achieved
   totalSolWon?: number; // Total SOL won from matches (optional, from database)
+  rating: number; // Elo rating (starts at 500, min 100)
 }
 
 export enum GamePhase {
@@ -110,6 +111,7 @@ export interface LeaderboardEntry {
   totalWins: number;
   totalLosses: number;
   winRate: number;
+  rating: number; // Elo rating for leaderboard ranking
 }
 
 // Matchmaking

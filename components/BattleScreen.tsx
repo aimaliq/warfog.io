@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState, GamePhase, Base, Player } from '../types';
 import { FlagIcon } from './FlagIcon';
-import { supabase, updateLastPlayedAt } from '../lib/supabase';
+import { supabase, updateLastPlayedAt, calculateEloChange, applyRatingChange } from '../lib/supabase';
 
 // Helper to create fresh bases
 const createBases = (): Base[] => [
@@ -29,38 +29,55 @@ const updateGameResults = async (
     const winnerGain = betAmount * 1.9;
     const loserLoss = betAmount * 1.0;
 
-    // Get current balances first
+    // Get current stats and ratings
     const { data: winnerData } = await supabase
       .from('players')
-      .select('total_wins, game_balance, total_sol_won')
+      .select('total_wins, game_balance, total_sol_won, rating')
       .eq('id', winnerId)
       .single();
 
     const { data: loserData } = await supabase
       .from('players')
-      .select('total_losses, game_balance')
+      .select('total_losses, game_balance, rating')
       .eq('id', loserId)
       .single();
 
-    // Update winner balance and stats
+    // Calculate Elo rating changes (applies to ALL matches - free and wagered)
+    let winnerNewRating = winnerData?.rating || 500;
+    let loserNewRating = loserData?.rating || 500;
+
+    if (winnerData && loserData) {
+      const winnerRatingChange = calculateEloChange(winnerData.rating || 500, loserData.rating || 500, true);
+      const loserRatingChange = calculateEloChange(loserData.rating || 500, winnerData.rating || 500, false);
+
+      // Apply rating changes with 100 floor
+      winnerNewRating = applyRatingChange(winnerData.rating || 500, winnerRatingChange);
+      loserNewRating = applyRatingChange(loserData.rating || 500, loserRatingChange);
+
+      console.log(`Rating changes: Winner ${winnerRatingChange > 0 ? '+' : ''}${winnerRatingChange} (${winnerData.rating} → ${winnerNewRating}), Loser ${loserRatingChange > 0 ? '+' : ''}${loserRatingChange} (${loserData.rating} → ${loserNewRating})`);
+    }
+
+    // Update winner balance, stats, and rating
     if (winnerData) {
       await supabase
         .from('players')
         .update({
           total_wins: (winnerData.total_wins || 0) + 1,
           game_balance: (winnerData.game_balance || 0) + winnerGain,
-          total_sol_won: (winnerData.total_sol_won || 0) + winnerGain
+          total_sol_won: (winnerData.total_sol_won || 0) + winnerGain,
+          rating: winnerNewRating
         })
         .eq('id', winnerId);
     }
 
-    // Update loser balance and stats
+    // Update loser balance, stats, and rating
     if (loserData) {
       await supabase
         .from('players')
         .update({
           total_losses: (loserData.total_losses || 0) + 1,
-          game_balance: Math.max(0, (loserData.game_balance || 0) - loserLoss) // Don't go negative
+          game_balance: Math.max(0, (loserData.game_balance || 0) - loserLoss), // Don't go negative
+          rating: loserNewRating
         })
         .eq('id', loserId);
     }
@@ -224,6 +241,9 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
   const [rematchCountdown, setRematchCountdown] = useState(0);
   const [rematchStatus, setRematchStatus] = useState('');
 
+  // Rating change tracking
+  const [ratingChanges, setRatingChanges] = useState<{ player: number; enemy: number } | null>(null);
+
   // Load real opponent data when matchId exists
   useEffect(() => {
     if (!matchId || matchDataLoaded) return;
@@ -340,12 +360,20 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
         if (data.resignation) {
           console.log('🏳️ Opponent resigned during active play!');
 
-          setGameState(current => ({
-            ...current,
-            phase: GamePhase.GAME_OVER,
-            winner: data.resignation.winnerId,
-            winReason: 'OPPONENT_FORFEIT'
-          }));
+          setGameState(current => {
+            // Calculate rating changes for resignation
+            const isPlayerWinner = data.resignation.winnerId === current.player1.id;
+            const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, isPlayerWinner);
+            const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, !isPlayerWinner);
+            setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
+
+            return {
+              ...current,
+              phase: GamePhase.GAME_OVER,
+              winner: data.resignation.winnerId,
+              winReason: 'OPPONENT_FORFEIT'
+            };
+          });
 
           // Trigger settlement for wagered match
           if (data.match.wager_amount && data.match.wager_amount > 0 && data.resignation.winnerId) {
@@ -401,12 +429,20 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
           console.log('🏳️ Opponent resigned!');
           setWaitingForOpponent(false);
 
-          setGameState(current => ({
-            ...current,
-            phase: GamePhase.GAME_OVER,
-            winner: resignation.winnerId,
-            winReason: 'OPPONENT_FORFEIT'
-          }));
+          setGameState(current => {
+            // Calculate rating changes for resignation
+            const isPlayerWinner = resignation.winnerId === current.player1.id;
+            const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, isPlayerWinner);
+            const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, !isPlayerWinner);
+            setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
+
+            return {
+              ...current,
+              phase: GamePhase.GAME_OVER,
+              winner: resignation.winnerId,
+              winReason: 'OPPONENT_FORFEIT'
+            };
+          });
 
           // Trigger settlement for wagered match
           if (match.wager_amount && match.wager_amount > 0 && resignation.winnerId) {
@@ -606,6 +642,16 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
             setGameState(current => {
               const winner = match.winner_id || 'TIE';
               const winReason = winner === 'TIE' ? 'TIE_HP' : 'BASES_DESTROYED';
+
+              // Calculate rating changes
+              if (winner !== 'TIE') {
+                const isPlayerWinner = winner === current.player1.id;
+                const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, isPlayerWinner);
+                const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, !isPlayerWinner);
+                setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
+              } else {
+                setRatingChanges(null);
+              }
 
               return {
                 ...current,
@@ -1161,6 +1207,11 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                       updatedPlayer1.gamesPlayed += 1;
                       updatedPlayer2.gamesPlayed += 1;
 
+                      // Calculate Elo rating changes
+                      const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, true);
+                      const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, false);
+                      setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
+
                       // Update database with win/loss and balance changes (only for wagered matches)
                       if (current.betAmount > 0) {
                         updateGameResults(current.player1.id, current.player2.id, current.betAmount);
@@ -1177,6 +1228,11 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                       updatedPlayer1.gamesPlayed += 1;
                       updatedPlayer2.gamesPlayed += 1;
 
+                      // Calculate Elo rating changes
+                      const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, false);
+                      const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, true);
+                      setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
+
                       // Update database with win/loss and balance changes (only for wagered matches)
                       if (current.betAmount > 0) {
                         updateGameResults(current.player2.id, current.player1.id, current.betAmount);
@@ -1187,6 +1243,9 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                       winReason = 'TIE_HP';
                       updatedPlayer1.currentStreak = 0;
                       updatedPlayer2.currentStreak = 0;
+
+                      // No rating changes for ties
+                      setRatingChanges(null);
 
                       // No balance updates for ties
                    }
@@ -1272,7 +1331,6 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
   if (gameState.phase === GamePhase.MATCHMAKING) {
     return (
       <div className="flex flex-col justify-between h-full w-full max-w-6xl mx-auto px-4 pt-4 pb-2 relative overflow-hidden lg:ml-64" style={{ minHeight: 'calc(100vh - 80px)' }}>
-
         {/* Enemy Section - Slide Down */}
         <div className="w-full flex flex-col gap-2 animate-slide-down">
           <div className="flex justify-between items-start px-1">
@@ -1361,7 +1419,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
               <FlagIcon countryCode={player.countryFlag} width="48px" height="32px" />
               <div>
                 <div className="text-lime-500 font-bold text-sm tracking-wider">{player.username}</div>
-                <div className="text-[9px] text-lime-800">COMMANDER STATUS: ONLINE</div>
+                <div className="text-[10px] text-yellow-400 font-bold font-mono">⚡ {player.rating || 500}</div>
               </div>
             </div>
           </div>
@@ -1377,6 +1435,14 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
      const isFreeMatch = gameState.betAmount === 0;
      const isResignation = gameState.winReason === 'OPPONENT_FORFEIT';
 
+     // Calculate rating changes if not already set
+     let displayRatingChanges = ratingChanges;
+     if (!displayRatingChanges && !isDraw) {
+       const playerRatingChange = calculateEloChange(player.rating, enemy.rating, isWin);
+       const enemyRatingChange = calculateEloChange(enemy.rating, player.rating, !isWin);
+       displayRatingChanges = { player: playerRatingChange, enemy: enemyRatingChange };
+     }
+
      return (
          <div className="flex flex-col items-center justify-center min-h-screen animate-pulse z-50 relative w-full px-4 lg:ml-64">
              <h1 className={`text-5xl font-black mb-8 text-center ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
@@ -1390,8 +1456,18 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
              )}
 
              {!isFreeMatch && (
-               <div className={`text-3xl mb-8 font-bold font-mono ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
+               <div className={`text-3xl mb-4 font-bold font-mono ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-red-600'}`}>
                    {isDraw ? '0 SOL' : isWin ? `+${(gameState.betAmount * 1.9).toFixed(3)} SOL` : `-${gameState.betAmount.toFixed(3)} SOL`}
+               </div>
+             )}
+
+             {/* Rating Change Display - All matches (free + wagered) */}
+             {!isDraw && displayRatingChanges && (
+               <div className="text-4xl mb-8 font-bold font-mono">
+                 <span className="text-gray-200">⚡{player.rating} </span>
+                 <span className={displayRatingChanges.player >= 0 ? 'text-lime-500' : 'text-red-500'}>
+                   {displayRatingChanges.player >= 0 ? '+' : ''}{displayRatingChanges.player}
+                 </span>
                </div>
              )}
 
@@ -1473,7 +1549,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                  <button
                     onClick={() => window.location.reload()}
                     className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
-                 >RETURN TO LOBBY
+                 >RETURN BACK
                  </button>
                </>
              ) : (
@@ -1589,7 +1665,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                  <button
                     onClick={() => window.location.reload()}
                     className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
-                 >RETURN TO LOBBY
+                 >RETURN BACK
                  </button>
                </>
              )}
@@ -1620,9 +1696,8 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
               <div className="text-red-500 font-bold tracking-wider text-sm md:text-base">
                 {enemy.username}
               </div>
-              <div className="text-[10px] text-red-800 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-                LIVE
+              <div className="text-[10px] text-yellow-400 font-bold font-mono">
+                ⚡ {enemy.rating || 500}
               </div>
             </div>
           </div>
@@ -1807,7 +1882,7 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
             <FlagIcon countryCode={player.countryFlag} width="48px" height="32px" />
             <div>
               <div className="text-lime-500 font-bold text-sm tracking-wider">{player.username}</div>
-              <div className="text-[9px] text-lime-800">COMMANDER STATUS: ONLINE</div>
+              <div className="text-[10px] text-yellow-400 font-bold font-mono">⚡ {player.rating || 500}</div>
             </div>
           </div>
         </div>

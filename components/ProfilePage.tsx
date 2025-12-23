@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Player } from '../types';
 import { FlagIcon } from './FlagIcon';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { WalletButton } from './WalletButton';
 import { supabase } from '../lib/supabase';
 import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { useMatchHistory } from '../hooks/useMatchHistory';
@@ -209,7 +209,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
     try {
       // Create connection to Solana (reads from environment: mainnet or devnet)
-      const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+      const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
       const connection = new Connection(rpcUrl, 'confirmed');
 
       // Game treasury wallet address from environment variable
@@ -349,29 +349,35 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
     <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
       <div className="w-full max-w-2xl">
 
-        {/* Header */}
-        <h1 className="text-3xl font-black text-lime-500 mb-8">PROFILE</h1>
+        {/* Header - Wallet Button */}
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="lg:hidden text-3xl font-black text-lime-500">PROFILE</h1>
+          <WalletButton className="wallet-custom lg:ml-auto" />
+        </div>
+
+        {/* Desktop Title */}
+        <h1 className="hidden lg:block text-3xl font-black text-lime-500 mb-8">PROFILE</h1>
 
         {/* Profile Card */}
         <div className="bg-black/60 p-6 mb-6">
           <div className="flex items-center gap-6 mb-6">
             <button className="hover:scale-110 transition-transform">
-              <FlagIcon countryCode={currentCountry} width="96px" height="72px" />
+              <FlagIcon countryCode={currentCountry} width="66px" height="42px" />
             </button>
             <div className="flex-1">
-              <div className="text-white font-black text-3xl">
+              <div className="text-white font-black text-2xl">{currentUsername}</div>
+              <div className="text-xl text-lime-500 font-mono">
                 {connected && publicKey
                   ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`
                   : 'GUEST_MODE'}
               </div>
-              <div className="text-xl text-lime-500 font-mono">{currentUsername}</div>
             </div>
           </div>
 
           {/* WARFOG Balance - Full Width */}
           {connected && publicKey && (
             <div className="mb-3 space-y-2">
-              <div className="border border-lime-700 px-3 py-2 flex justify-between items-center">
+              <div className="border border-lime-700 rounded px-3 py-2 flex justify-between items-center">
                 <span className="text-center font-bold">
                   <span className="text-white text-[21px]">GAME BALANCE:</span><br/><br/>
                   <span className="text-lime-500 text-2xl">{gameBalance.toFixed(2)} SOL</span>
@@ -385,7 +391,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                         setIsHistoryOpen(false);
                       }
                     }}
-                    className="px-4 py-1 bg-lime-900/40 border border-lime-500 text-lime-400 text-sm font-bold hover:bg-lime-900/60 transition-all"
+                    className="px-4 py-1 bg-lime-900/40 border rounded border-lime-500 text-lime-400 text-sm font-bold hover:bg-lime-900/60 transition-all"
                   >
                     DEPOSIT
                   </button>
@@ -397,7 +403,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                         setIsHistoryOpen(false);
                       }
                     }}
-                    className="px-4 py-1 bg-amber-900/40 border border-amber-700 text-amber-400 text-sm font-bold hover:bg-amber-900/60 transition-all"
+                    className="px-4 py-1 bg-amber-900/40 border rounded border-amber-700 text-amber-400 text-sm font-bold hover:bg-amber-900/60 transition-all"
                   >
                     WITHDRAW
                   </button>
@@ -409,7 +415,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                         setIsWithdrawOpen(false);
                       }
                     }}
-                    className="px-4 py-1 bg-gray-900/40 border border-gray-500 text-gray-400 text-sm font-bold hover:bg-gray-900/60 transition-all"
+                    className="px-4 py-1 bg-gray-900/40 border rounded border-gray-500 text-gray-400 text-sm font-bold hover:bg-gray-900/60 transition-all"
                   >
                     HISTORY
                   </button>
@@ -418,7 +424,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
               {/* Deposit Section */}
               {isDepositOpen && (
-                <div className="border border-lime-700 p-3 bg-black/40 animate-fadeIn">
+                <div className="border rounded border-lime-700 p-3 bg-black/40 animate-fadeIn">
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs text-gray-600 mb-2 tracking-widest">AMOUNT (SOL)</label>
@@ -428,19 +434,19 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                         min="0.1"
                         value={depositAmount}
                         onChange={(e) => setDepositAmount(e.target.value)}
-                        className="w-full bg-black/40 border-2 border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors"
+                        className="w-full bg-black/40 border-2 rounded border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors"
                         placeholder="0"
                       />
                       <p className="text-xs text-gray-600 mt-1">Transfer SOL from your wallet to your game balance</p>
                     </div>
 
                     {depositError && (
-                      <div className="bg-red-900/20 border border-red-700 px-3 py-2">
+                      <div className="bg-red-900/20 border rounded border-red-700 px-3 py-2">
                         <span className="text-red-500 text-xs font-bold">{depositError}</span>
                       </div>
                     )}
                     {depositSuccess && (
-                      <div className="bg-lime-900/20 border border-lime-700 px-3 py-2">
+                      <div className="bg-lime-900/20 border rounded border-lime-700 px-3 py-2">
                         <span className="text-lime-500 text-xs font-bold">✓ Deposit successful!</span>
                       </div>
                     )}
@@ -448,7 +454,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                     <button
                       onClick={handleDeposit}
                       disabled={isDepositing}
-                      className="w-full py-2 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-2 bg-lime-900/40 border-2 rounded border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isDepositing ? 'PROCESSING...' : 'CONFIRM DEPOSIT'}
                     </button>
@@ -458,7 +464,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
               {/* Withdraw Section */}
               {isWithdrawOpen && (
-                <div className="border border-amber-700 p-3 bg-black/40 animate-fadeIn">
+                <div className="border rounded border-amber-700 p-3 bg-black/40 animate-fadeIn">
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs text-gray-600 mb-2 tracking-widest">AMOUNT (SOL)</label>
@@ -469,7 +475,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                         max={gameBalance}
                         value={withdrawAmount}
                         onChange={(e) => setWithdrawAmount(e.target.value)}
-                        className="w-full bg-black/40 border-2 border-amber-900 text-amber-500 font-bold px-4 py-2 focus:border-amber-500 focus:outline-none transition-colors"
+                        className="w-full bg-black/40 border-2 rounded border-amber-900 text-amber-500 font-bold px-4 py-2 focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="0"
                       />
                       <p className="text-xs text-gray-600 mt-1">Withdraw SOL from your game balance to your wallet</p>
@@ -477,12 +483,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                     </div>
 
                     {withdrawError && (
-                      <div className="bg-red-900/20 border border-red-700 px-3 py-2">
+                      <div className="bg-red-900/20 rounded border border-red-700 px-3 py-2">
                         <span className="text-red-500 text-xs font-bold">{withdrawError}</span>
                       </div>
                     )}
                     {withdrawSuccess && (
-                      <div className="bg-lime-900/20 border border-lime-700 px-3 py-2">
+                      <div className="bg-lime-900/20 border rounded border-lime-700 px-3 py-2">
                         <span className="text-lime-500 text-xs font-bold">✓ Withdrawal successful!</span>
                       </div>
                     )}
@@ -490,7 +496,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                     <button
                       onClick={handleWithdraw}
                       disabled={isWithdrawing || gameBalance === 0}
-                      className="w-full py-2 bg-amber-900/40 border-2 border-amber-400 text-amber-400 font-bold hover:bg-amber-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-2 bg-amber-900/40 border-2 rounded border-amber-400 text-amber-400 font-bold hover:bg-amber-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isWithdrawing ? 'PROCESSING...' : 'CONFIRM WITHDRAWAL'}
                     </button>
@@ -500,7 +506,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
               {/* Transaction History Section */}
               {isHistoryOpen && (
-                <div className="border border-gray-500 p-3 bg-black/40 animate-fadeIn">
+                <div className="border border-gray-500 rounded p-3 bg-black/40 animate-fadeIn">
                   <div className="max-h-[300px] overflow-y-auto">
                     {isLoadingTransactions ? (
                       <div className="text-center py-8 text-gray-500 text-sm">
@@ -571,45 +577,40 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
             </div>
           )}
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => setIsEditOpen(!isEditOpen)}
-              className="flex-1 border-2 border-lime-900 text-lime-500 font-bold hover:bg-lime-900/20 transition-all flex items-center justify-center gap-2"
-            >
-              <span className="material-icons-outlined text-sm">
-                {isEditOpen ? 'expand_less' : 'edit'}
-              </span>
-              EDIT INFO
-            </button>
-            <div className="wallet-custom flex-1">
-              <WalletMultiButton />
-            </div>
-          </div>
+          <button
+            onClick={() => setIsEditOpen(!isEditOpen)}
+            className="w-full border-2 rounded border-lime-900 text-lime-500 font-bold hover:bg-lime-900/20 transition-all flex items-center justify-center gap-2 py-2"
+          >
+            <span className="material-icons-outlined text-sm">
+              {isEditOpen ? 'expand_less' : 'edit'}
+            </span>
+            EDIT INFO
+          </button>
 
           {/* Edit Profile Dropdown */}
           {isEditOpen && (
-            <div className="mt-4 border-t-2 border-lime-900 pt-4 space-y-4 animate-fadeIn">
+            <div className="mt-4 border-t-2 rounded border-lime-900 pt-4 space-y-4 animate-fadeIn">
               {/* Username Field */}
               <div>
-                <label className="block text-xs text-gray-600 mb-2 tracking-widest">USERNAME</label>
+                <label className="block text-xs text-gray-400 mb-2 tracking-widest">Nickname</label>
                 <input
                   type="text"
                   value={editUsername}
                   onChange={(e) => setEditUsername(e.target.value)}
                   maxLength={20}
-                  className="w-full bg-black/40 border-2 border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors"
+                  className="w-full bg-black/40 border-2 rounded border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors"
                   placeholder="Enter username"
                 />
               </div>
 
               {/* Country Selector */}
               <div>
-                <label className="block text-xs text-gray-600 mb-2 tracking-widest">COUNTRY</label>
+                <label className="block text-xs text-gray-400 mb-2 tracking-widest">Country</label>
                 <div className="relative">
                   <select
                     value={editCountry}
                     onChange={(e) => setEditCountry(e.target.value)}
-                    className="w-full bg-black/40 border-2 border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors appearance-none cursor-pointer"
+                    className="w-full bg-black/40 border-2 rounded border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors appearance-none cursor-pointer"
                   >
                     {COUNTRY_CODES.map((code) => (
                       <option key={code} value={code} className="bg-black text-lime-500">
@@ -625,12 +626,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
               {/* Status Messages */}
               {saveError && (
-                <div className="bg-red-900/20 border border-red-700 px-3 py-2">
+                <div className="bg-red-900/20 border rounded border-red-700 px-3 py-2">
                   <span className="text-red-500 text-xs font-bold">{saveError}</span>
                 </div>
               )}
               {saveSuccess && (
-                <div className="bg-lime-900/20 border border-lime-700 px-3 py-2">
+                <div className="bg-lime-900/20 border rounded border-lime-700 px-3 py-2">
                   <span className="text-lime-500 text-xs font-bold">✓ Changes saved successfully!</span>
                 </div>
               )}
@@ -640,14 +641,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                 <button
                   onClick={handleSaveProfile}
                   disabled={isSaving}
-                  className="flex-1 py-2 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2 bg-lime-900/40 border-2 rounded border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSaving ? 'SAVING...' : 'SAVE CHANGES'}
                 </button>
                 <button
                   onClick={handleCancelEdit}
                   disabled={isSaving}
-                  className="flex-1 py-2 border-2 border-gray-700 text-gray-500 font-bold hover:bg-gray-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2 border-2 rounded border-gray-700 text-gray-500 font-bold hover:bg-gray-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   CANCEL
                 </button>
@@ -701,6 +702,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
             <div className="text-3xl text-lime-500 font-black font-mono">
               {player.longestStreak}
             </div>
+          </div>
+
+          <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">RATING</div>
+            <div className="text-3xl text-yellow-400 font-black font-mono">{player.rating || 500}</div>
           </div>
         </div>
 

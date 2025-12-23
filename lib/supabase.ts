@@ -27,6 +27,7 @@ export interface Player {
   current_streak: number;
   best_streak: number;
   warfog_balance: number;
+  rating: number;
   created_at: string;
   last_played_at: string;
 }
@@ -110,3 +111,46 @@ export const updateLastPlayedAt = async (playerId: string): Promise<void> => {
     console.error('Error updating last_played_at:', error);
   }
 };
+
+// Elo Rating System Functions
+// K-factor of 16 (standard chess rating)
+const ELO_K_FACTOR = 16;
+const MIN_RATING = 100; // Floor rating
+
+/**
+ * Calculate Elo rating change for a player
+ * @param playerRating Current rating of the player
+ * @param opponentRating Current rating of the opponent
+ * @param didWin True if player won, false if lost
+ * @param kFactor K-factor for rating volatility (default 16)
+ * @returns Rating change (positive or negative integer)
+ */
+export function calculateEloChange(
+  playerRating: number,
+  opponentRating: number,
+  didWin: boolean,
+  kFactor: number = ELO_K_FACTOR
+): number {
+  // Calculate expected score (probability of winning)
+  const expectedScore = 1 / (1 + Math.pow(10, (opponentRating - playerRating) / 400));
+
+  // Actual score: 1 for win, 0 for loss
+  const actualScore = didWin ? 1 : 0;
+
+  // Calculate rating change
+  const ratingChange = kFactor * (actualScore - expectedScore);
+
+  // Round to nearest integer
+  return Math.round(ratingChange);
+}
+
+/**
+ * Apply rating change with floor enforcement
+ * @param currentRating Player's current rating
+ * @param change Rating change to apply
+ * @returns New rating (cannot drop below MIN_RATING)
+ */
+export function applyRatingChange(currentRating: number, change: number): number {
+  const newRating = currentRating + change;
+  return Math.max(MIN_RATING, newRating); // Floor at 100
+}

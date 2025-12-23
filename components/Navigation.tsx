@@ -9,7 +9,8 @@ interface NavigationProps {
 
 export const Navigation: React.FC<NavigationProps> = ({ activeTab, onChange, isInMatch, onForfeit }) => {
   const navItems = [
-    { id: 'lobby', icon: 'home', label: 'LOBBY' },
+    { id: 'play', icon: 'sports_esports', label: 'PLAY' },
+    { id: 'sol', icon: 'paid', label: 'SOL' },
     { id: 'leaderboard', icon: 'emoji_events', label: 'LEADERBOARD' },
     { id: 'profile', icon: 'badge', label: 'PROFILE' }
   ];

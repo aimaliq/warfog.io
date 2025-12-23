@@ -9,15 +9,13 @@ import { useActivityFeed } from '../hooks/useActivityFeed';
 import { WinsTicker } from './WinsTicker';
 import { FlagIcon } from './FlagIcon';
 
-interface LobbyPageProps {
+interface SOLBattlesPageProps {
   player: Player;
   onStartBattle: (matchId?: string) => void;
-  matches?: any[];
-  onMatchesChange?: (matches: any[]) => void;
   isInBattle?: boolean;
 }
 
-export const LobbyPage: React.FC<LobbyPageProps> = ({
+export const SOLBattlesPage: React.FC<SOLBattlesPageProps> = ({
   player,
   onStartBattle,
   isInBattle = false
@@ -25,8 +23,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   const { connected, publicKey } = useWallet();
   const { onlineCount, isLoading } = useOnlinePlayers();
   const { wins } = useRecentWins();
-  const { activities } = useActivityFeed();
-  const [isHowToPlayOpen, setIsHowToPlayOpen] = useState(false);
+  const { activities } = useActivityFeed('wagered');
   const [selectedBet, setSelectedBet] = useState<number>(0.01);
   const [gameBalance, setGameBalance] = useState<number>(0);
   const [isLoadingBalance, setIsLoadingBalance] = useState(true);
@@ -42,6 +39,9 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
   // Shake animation state for Latest Wins
   const [previousWinsCount, setPreviousWinsCount] = useState<number>(0);
   const [isWinsShaking, setIsWinsShaking] = useState(false);
+
+  // players simulation
+  const [fPlayers, setFPlayers] = useState<number>(0);
 
   // Fetch user's game balance
   useEffect(() => {
@@ -98,84 +98,81 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
           .limit(1)
           .maybeSingle();
 
-        if (error) {
-          console.error('Error checking for match:', error);
-          return;
-        }
+        if (error) throw error;
 
         if (match) {
-          console.log('✅ Match found! Transitioning to battle...', match.id);
+          console.log('✅ Match found:', match.id);
           setQueueStatus('matched');
           onStartBattle(match.id);
         }
       } catch (error) {
-        console.error('Error in match polling:', error);
+        console.error('Error checking for match:', error);
       }
     };
 
-    // Check immediately, then every second
+    // Poll immediately, then every 1 second
     checkForMatch();
-    const interval = setInterval(checkForMatch, 1000);
+    const pollInterval = setInterval(checkForMatch, 1000);
 
-    return () => {
-      console.log('⏹️ Stopping match polling');
-      clearInterval(interval);
-    };
-  }, [queueStatus, player.id]);
+    return () => clearInterval(pollInterval);
+  }, [queueStatus, player.id, onStartBattle]);
 
   // Nuclear icon rotation animation
   useEffect(() => {
     if (queueStatus !== 'queued') return;
 
-    const interval = setInterval(() => {
+    const rotationInterval = setInterval(() => {
       setRotationAngle(prev => (prev + 45) % 360);
     }, 200);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(rotationInterval);
   }, [queueStatus]);
 
-  // Queue count monitoring
+  // Monitor queue count for current wager
   useEffect(() => {
-    if (queueStatus !== 'queued' || !searchingWager) return;
+    if (queueStatus !== 'queued' || searchingWager === null) return;
 
-    const fetchQueueCount = async () => {
-      const { data } = await supabase
-        .from('matchmaking_queue')
-        .select('id')
-        .eq('wager_amount', searchingWager);
+    const updateQueueCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('matchmaking_queue')
+          .select('*', { count: 'exact', head: true })
+          .eq('wager_amount', searchingWager);
 
-      // Subtract 1 to exclude current player
-      setQueueCount(Math.max(0, (data?.length || 0) - 1));
+        if (!error && count !== null) {
+          setQueueCount(Math.max(0, count - 1));
+        }
+      } catch (error) {
+        console.error('Error fetching queue count:', error);
+      }
     };
 
-    fetchQueueCount();
-    const interval = setInterval(fetchQueueCount, 3000);
+    updateQueueCount();
+    const interval = setInterval(updateQueueCount, 3000);
+
     return () => clearInterval(interval);
   }, [queueStatus, searchingWager]);
 
-  // Timeout auto-cancel (3 minutes)
+  // Auto-cancel queue after timeout
   useEffect(() => {
     if (queueStatus !== 'queued') return;
 
-    const timeout = setTimeout(() => {
-      setMatchmakingError('Matchmaking timed out. Please try again.');
+    const timeoutId = setTimeout(() => {
       handleCancelQueue();
-    }, 180000);
+    }, 180000); // 3 minutes
 
-    return () => clearTimeout(timeout);
+    return () => clearTimeout(timeoutId);
   }, [queueStatus]);
 
-  // Browser close cleanup
+  // Browser close/refresh cleanup
   useEffect(() => {
+    if (queueStatus !== 'queued') return;
+
     const handleBeforeUnload = () => {
       if (queueStatus === 'queued' && player.id) {
-        const blob = new Blob(
-          [JSON.stringify({ playerId: player.id })],
-          { type: 'application/json' }
-        );
         navigator.sendBeacon(
           `${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/leave`,
-          blob
+          JSON.stringify({ playerId: player.id })
         );
       }
     };
@@ -184,7 +181,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [queueStatus, player.id]);
 
-  // Detect new wins for shake animation
+  // Wins shake animation
   useEffect(() => {
     if (wins.length > previousWinsCount && previousWinsCount > 0) {
       setIsWinsShaking(true);
@@ -192,6 +189,18 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     }
     setPreviousWinsCount(wins.length);
   }, [wins.length]);
+
+  // Fake player simulation
+  useEffect(() => {
+    const getRandom = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+    setFPlayers(getRandom(4, 12));
+
+    const interval = setInterval(() => {
+      setFPlayers(getRandom(4, 12));
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleJoinQueue = async (wager: number) => {
     if (!connected || !publicKey) return;
@@ -253,165 +262,20 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
     }
   };
 
-  // 1. Simulate fake activity for launch
-  const [fPlayers, setFPlayers] = useState(8);
-
-  // 2. Simulate traffic between 4 and 12
-  useEffect(() => {
-    const getRandom = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-    
-    setFPlayers(getRandom(4, 12));
-
-    const interval = setInterval(() => {
-      setFPlayers(prev => {
-        // Randomly add -1, 0, or +1
-        const change = getRandom(-1, 1);
-        let newValue = prev + change;
-        
-        // Force it to stay within 4 and 12
-        if (newValue < 4) newValue = 4;
-        if (newValue > 12) newValue = 12;
-        
-        return newValue;
-      });
-    }, 5000); // Updates every 5 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-  
   return (
     <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
       <div className="w-full max-w-2xl">
 
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <h1 className="lg:hidden text-3xl font-black text-lime-500 animate-pulse">WARFOG.IO</h1>
+          <h1 className="lg:hidden text-3xl font-black text-lime-500">SOL BATTLES</h1>
           <WalletButton className="wallet-custom lg:ml-auto" />
         </div>
-      
 
-        {/* How to Play Section */}
-        <div className="bg-black/60 mb-2">
-          <button
-            onClick={() => setIsHowToPlayOpen(!isHowToPlayOpen)}
-            className="w-full px-4 py-3 flex items-center justify-center gap-2 hover:bg-lime-900/10 transition-all relative"
-          >
-            <span className="material-icons-outlined text-yellow-500 text-xl">help_outline</span>
-            <h3 className="text-yellow-500 font-bold text-lg tracking-widest">HOW TO PLAY</h3>
-            <span className="material-icons-outlined text-yellow-500 text-2xl absolute right-12">
-              {isHowToPlayOpen ? 'expand_less' : 'expand_more'}
-            </span>
-          </button>
-
-          {isHowToPlayOpen && (
-            <div className="px-4 pb-4 pt-2 border-t border-lime-900/30 space-y-4 animate-fadeIn">
-                            
-              {/* Step 1 */}
-              
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">1</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">ATTACK THE ENEMY</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Attack 3 enemy silos. Each silo destroyed grants you +1 HP on your defenses.
-                  </p>
-                  <div>
-                    <img
-                      src="/attack-mechanics.gif"
-                      alt="Attack mechanics"
-                      className="w-full rounded-md"
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              {/* Step 2 */}
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">2</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">DEFEND YOUR SILOS</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Defend 2 silos from enemy missiles. Hit silos lose -1 HP.
-                  </p>
-                  <div>
-                    <img
-                      src="/defend-mechanics.gif"
-                      alt="Defend mechanics"
-                      className="w-full rounded-md"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">3</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">DESTROY 3 TO WIN</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Destroy 3 enemy silos to win the match.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div className="flex gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border border-lime-500 flex items-center justify-center">
-                  <span className="text-yellow-500 font-black text-sm">4</span>
-                </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">10-SECOND TURNS</div>
-                  <p className="text-xs text-gray-400 leading-relaxed mb-4">
-                    Fast decisions. No time for caution.
-                  </p>
-                </div>
-              </div>
-
-              {/* Join Battle Button */}
-                <div className="btn-snake-wrapper">
-                  <svg xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
-                        <stop offset="30%" style={{ stopColor: '#84cc16', stopOpacity: 0.3 }} />
-                        <stop offset="70%" style={{ stopColor: '#a3e635', stopOpacity: 0.5 }} />
-                        <stop offset="100%" style={{ stopColor: '#84cc16', stopOpacity: 1 }} />
-                      </linearGradient>
-                      <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" style={{ stopColor: 'transparent', stopOpacity: 0 }} />
-                        <stop offset="30%" style={{ stopColor: '#65a30d', stopOpacity: 0.3 }} />
-                        <stop offset="70%" style={{ stopColor: '#84cc16', stopOpacity: 0.5 }} />
-                        <stop offset="100%" style={{ stopColor: '#65a30d', stopOpacity: 1 }} />
-                      </linearGradient>
-                    </defs>
-                    <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
-                    <rect x="2" y="2" width="calc(100% - 4px)" height="calc(100% - 4px)" />
-                  </svg>
-                  <button
-                    onClick={() => onStartBattle()}
-                    disabled={isInBattle}
-                    className="w-full py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
-                  >
-                    PLAY FREE BATTLE
-                  </button>
-                </div>
-            </div>
-          )}
-        </div>
-      
-        <div className="text-center mt-3 text-xs text-gray-600 mb-6">
-        </div>
-
-        {/* Live Operations Table */}
+        {/* SOL Battles Section */}
         <div className="bg-black/60 mt-5">
           <div className="border-b border-lime-900 px-4 py-2 bg-lime-900/10 flex justify-between items-center">
-            <h2 className="text-lime-500 font-bold text-md tracking-widest">SOL BATTLES</h2>
+            <h2 className="text-lime-500 font-bold text-lg tracking-widest">CHOOSE LOBBY</h2>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="text-red-500 font-bold text-xs font-mono">
@@ -423,10 +287,6 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
             {/* Queue-Based Matchmaking */}
             <div className="space-y-3">
-              {/* Choose Lobby Header */}
-              <div className="text-center mb-3">
-                <h3 className="text-lime-500 font-bold text-lg tracking-widest">CHOOSE LOBBY</h3>
-              </div>
 
               {/* Balance Display */}
               {connected && (
@@ -447,7 +307,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                       key={wager}
                       onClick={() => setSelectedBet(wager)}
                       disabled={!connected || isInBattle || queueStatus === 'queued'}
-                      className={`flex-1 px-4 py-2 border font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      className={`flex-1 px-4 py-2 border rounded font-mono text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                         selectedBet === wager
                           ? 'bg-lime-900/40 border-lime-500 text-lime-400'
                           : 'bg-gray-900 border-lime-900 text-lime-500 hover:border-lime-500 hover:bg-lime-900/20'
@@ -461,7 +321,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
               {/* Win Amount Display */}
               <div className="text-center text-gray-200 text-xl font-bold py-2">
-                Play <span className="text-yellow-400">{selectedBet.toFixed(2)} SOL</span> to WIN <br></br><span className="text-yellow-400 text-2xl">{(selectedBet * 1.9).toFixed(3)} SOL</span>!
+                Playing <span className="text-yellow-400">{selectedBet.toFixed(2)} SOL</span> to WIN <br></br><span className="text-yellow-400 text-2xl">{(selectedBet * 1.9).toFixed(3)} SOL</span>!
               </div>
 
               {/* Join Button */}
@@ -488,7 +348,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                   <button
                     onClick={() => handleJoinQueue(selectedBet)}
                     disabled={!connected || gameBalance < selectedBet || isInBattle || queueStatus === 'queued'}
-                    className="w-full px-6 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
+                    className="w-full px-6 py-3 bg-lime-900/40 border-2 rounded border-lime-400 text-lime-400 font-black text-xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest relative z-10 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40"
                   >
                     SEARCH OPPONENT
                   </button>
@@ -497,18 +357,18 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
               {!connected && (
                 <div className="text-center text-xs text-yellow-600">
-                  Connect wallet to win SOL
+                  Connect wallet to play SOL
                 </div>
               )}
 
               {balanceError && (
-                <div className="bg-red-900/20 border border-red-700 px-3 py-2">
+                <div className="bg-red-900/20 border rounded border-red-700 px-3 py-2">
                   <span className="text-red-500 text-xs font-bold">{balanceError}</span>
                 </div>
               )}
 
               {matchmakingError && (
-                <div className="bg-red-900/20 border border-red-700 px-3 py-2">
+                <div className="bg-red-900/20 border rounded border-red-700 px-3 py-2">
                   <span className="text-red-500 text-xs font-bold">{matchmakingError}</span>
                 </div>
               )}
@@ -516,7 +376,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
 
             {/* Searching State or Empty Message */}
             {queueStatus === 'queued' && searchingWager !== null ? (
-              <div className="border border-lime-500 bg-lime-900/20 p-6 space-y-4">
+              <div className="border rounded border-lime-500 bg-lime-900/20 p-6 space-y-4">
                 <div className="text-center space-y-3">
                   {/* Rotating Nuclear Icon */}
                   <div
@@ -541,7 +401,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({
                 {/* Cancel Button */}
                 <button
                   onClick={handleCancelQueue}
-                  className="w-full px-6 py-3 bg-red-900/40 border-2 border-red-500 text-red-400 font-bold hover:bg-red-900/60 transition-all"
+                  className="w-full px-6 py-3 bg-red-900/40 rounded border-2 border-red-500 text-red-400 font-bold hover:bg-red-900/60 transition-all"
                 >
                   CANCEL
                 </button>

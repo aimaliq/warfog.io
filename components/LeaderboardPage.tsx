@@ -4,6 +4,7 @@ import { FlagIcon } from './FlagIcon';
 import { useLeaderboard } from '../hooks/useLeaderboard';
 import { useLeaderboardChanges } from '../hooks/useLeaderboardChanges';
 import { FOMOTicker } from './FOMOTicker';
+import { WalletButton } from './WalletButton';
 
 interface LeaderboardPageProps {
   player: Player;
@@ -16,9 +17,14 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
     <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
       <div className="w-full max-w-4xl">
 
-        {/* Header */}
+        {/* Header - Wallet Button */}
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="lg:hidden text-3xl font-black text-lime-500">LEADERS</h1>
+          <WalletButton className="wallet-custom lg:ml-auto" />
+        </div>
+
         <div className="relative mb-6">
-            <h1 className="text-3xl font-black text-lime-500 mb-8">GLOBAL RANKING</h1>
+            <h1 className="hidden lg:block text-3xl font-black text-lime-500 mb-8">LEADERS</h1>
         </div>
 
         {/* Guest Warning - Tactical */}
@@ -49,12 +55,12 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
           <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-lime-500/70"></div>
 
           {/* Table Header */}
-          <div className="relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 bg-lime-950/30 border-b border-lime-500/30 text-lime-500 font-bold font-mono text-sm tracking-widest">
+          <div className="relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 bg-lime-950/30 border-b border-lime-500/30 text-gray-300 font-bold font-mono text-sm tracking-widest">
             <div className="col-span-1 flex items-center justify-center ml-2">#</div>
             <div className="col-span-1"></div>
             <div className="col-span-1"></div>
             <div className="col-span-4 sm:col-span-5">PLAYER</div>
-            <div className="col-span-5 sm:col-span-4 flex items-center justify-center">SOL WON</div>
+            <div className="col-span-5 sm:col-span-4 flex items-center justify-center">RATING⚡</div>
           </div>
 
           {/* Table Rows */}
@@ -105,18 +111,18 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                       <FlagIcon countryCode={entry.countryFlag} width="24px" height="18px" className="sm:w-[40px] sm:h-[28px]" />
                     </div>
                     <div className="col-span-4 pl-2">
-                      <div className="text-white text-[14px] sm:text-base truncate font-mono tracking-wide">
+                      <div className="text-white text-[14px] sm:text-base font-mono tracking-wider">
+                        {entry.username}
+                      <div className="text-[11px] sm:text-[12px] text-lime-500 truncate font-mono tracking-wide">
                         {isCurrentPlayer && <span className="text-yellow-500 mr-1">▸</span>}
                         {walletDisplay}
                       </div>
-                      <div className="text-[11px] sm:text-[12px] text-lime-500 font-mono truncate tracking-wider">
-                        {entry.username}
                       </div>
                     </div>
                     <div className="col-span-5 sm:col-span-4 flex items-center justify-center">
                       <div className="inline-block bg-black/50 px-2 sm:px-3 py-1">
                         <span className="text-yellow-400 font-bold font-mono text-[18px] sm:text-base tracking-wider">
-                          {entry.totalSolWon.toFixed(2)}
+                          {entry.rating}
                         </span>
                       </div>
                     </div>

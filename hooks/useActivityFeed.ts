@@ -10,7 +10,7 @@ export interface ActivityLog {
   opponentCountryCode?: string | null;
 }
 
-export const useActivityFeed = () => {
+export const useActivityFeed = (wagerFilter?: 'free' | 'wagered') => {
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -25,7 +25,7 @@ export const useActivityFeed = () => {
             activity_type,
             details,
             created_at,
-            player:players!activity_logs_player_id_fkey(country_code)
+            player:players!activity_logs_player_id_fkey(country_code, username)
           `)
           .order('created_at', { ascending: false })
           .limit(20);
@@ -40,36 +40,51 @@ export const useActivityFeed = () => {
               ? `${wallet.slice(0, 4)}...${wallet.slice(-4)}`
               : wallet;
 
+            // Get username from player data, or use wallet as fallback
+            const username = activity.player?.username || formattedWallet;
+            const wager = activity.details?.wager_amount || 0;
+
+            // For free matches (wager = 0), use username; for wagered, use wallet
+            const displayName = wager === 0 ? username : formattedWallet;
+
             let message = '';
             let opponentCountryCode: string | null = null;
 
             switch (activity.activity_type) {
               case 'wallet_connected':
-                message = `${formattedWallet} connected wallet`;
+                message = `${displayName} connected wallet`;
                 break;
               case 'joined_lobby':
-                const wager = activity.details?.wager_amount || 0;
-                message = `${formattedWallet} joined ${wager.toFixed(2)} lobby`;
+                message = `${displayName} joined ${wager.toFixed(2)} lobby`;
                 break;
               case 'match_started':
                 const opponent = activity.details?.opponent_wallet || 'Unknown';
                 const formattedOpponent = opponent.length > 8
                   ? `${opponent.slice(0, 4)}...${opponent.slice(-4)}`
                   : opponent;
-                message = `${formattedWallet} started battle vs ${formattedOpponent}`;
 
-                // Fetch opponent's country code
+                let opponentDisplayName = formattedOpponent;
+
+                // Fetch opponent's country code and username
                 if (opponent && opponent !== 'Unknown') {
                   const { data: opponentData } = await supabase
                     .from('players')
-                    .select('country_code')
+                    .select('country_code, username, wallet_address')
                     .eq('wallet_address', opponent)
                     .single();
+
                   opponentCountryCode = opponentData?.country_code || null;
+
+                  // Use username for free matches, wallet for wagered
+                  if (wager === 0 && opponentData?.username) {
+                    opponentDisplayName = opponentData.username;
+                  }
                 }
+
+                message = `${displayName} started battle vs ${opponentDisplayName}`;
                 break;
               default:
-                message = `${formattedWallet} performed action`;
+                message = `${displayName} performed action`;
             }
 
             return {
@@ -83,7 +98,23 @@ export const useActivityFeed = () => {
           })
         );
 
-        setActivities(formattedActivities);
+        // Apply wager filter if specified
+        let filteredActivities = formattedActivities;
+        if (wagerFilter) {
+          filteredActivities = formattedActivities.filter((_, index) => {
+            const originalActivity = data![index];
+            const wager = originalActivity.details?.wager_amount || 0;
+
+            if (wagerFilter === 'free') {
+              return wager === 0;
+            } else if (wagerFilter === 'wagered') {
+              return wager > 0;
+            }
+            return true;
+          });
+        }
+
+        setActivities(filteredActivities);
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching activity feed:', error);
@@ -98,7 +129,7 @@ export const useActivityFeed = () => {
     const interval = setInterval(fetchActivities, 10000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [wagerFilter]);
 
   return { activities, isLoading };
 };

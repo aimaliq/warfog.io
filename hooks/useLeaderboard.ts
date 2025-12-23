@@ -11,6 +11,7 @@ export interface LeaderboardPlayer {
   wallet: string;
   gameBalance: number;
   totalSolWon: number;
+  rating: number;
   registeredAt: string;
 }
 
@@ -23,10 +24,10 @@ export const useLeaderboard = () => {
       try {
         const { data, error } = await supabase
           .from('players')
-          .select('username, country_code, total_wins, total_losses, wallet_address, game_balance, total_sol_won, created_at, is_guest')
+          .select('username, country_code, total_wins, total_losses, wallet_address, game_balance, total_sol_won, rating, created_at, is_guest')
           .eq('is_guest', false) // Only registered wallets
           .not('wallet_address', 'is', null) // Exclude null wallet addresses
-          .order('total_sol_won', { ascending: false }) // Primary sort: Total SOL won
+          .order('rating', { ascending: false }) // Primary sort: Elo rating (highest first)
           .order('created_at', { ascending: true }) // Secondary sort: registration date
           .limit(100); // Show top 100 instead of just 10
 
@@ -49,6 +50,7 @@ export const useLeaderboard = () => {
               wallet: player.wallet_address || '',
               gameBalance: player.game_balance || 0,
               totalSolWon: player.total_sol_won || 0,
+              rating: player.rating || 500,
               registeredAt: player.created_at || '',
             };
           });
