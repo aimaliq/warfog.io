@@ -113,6 +113,7 @@ async function sendSecurityAlert({ errorType, errorMessage, context }) {
   const resendKey = process.env.RESEND_API_KEY;
 
   // Format alert message
+  const adminPath = process.env.ADMIN_SECRET_PATH || 'admin';
   const alertMessage = `
 🚨 WARFOG.IO SECURITY ALERT
 
@@ -123,7 +124,7 @@ Message: ${errorMessage}
 Context:
 ${JSON.stringify(context, null, 2)}
 
-Dashboard: https://warfog.io/admin
+Dashboard: https://warfog.io/${adminPath}
   `.trim();
 
   // Send Slack notification if configured
@@ -180,7 +181,7 @@ Dashboard: https://warfog.io/admin
                     text: '🔍 View Dashboard',
                     emoji: true
                   },
-                  url: 'https://warfog.io/admin',
+                  url: `https://warfog.io/${adminPath}`,
                   style: 'danger'
                 }
               ]
