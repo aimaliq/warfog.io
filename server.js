@@ -119,8 +119,40 @@ app.get('/api/treasury/balance', async (req, res) => {
   }
 });
 
+// ========================================================================
+// WITHDRAWAL ENDPOINT - SECURITY HARDENED
+// ========================================================================
+// SECURITY FIXES APPLIED (2024-12-24):
+// ✅ Fix #1: Database row locking (SELECT FOR UPDATE) prevents race conditions
+// ✅ Fix #2: Balance deduction happens BEFORE blockchain transaction
+// ✅ Fix #3: Refund mechanism if blockchain transaction fails
+// ✅ Fix #4: Ban check for malicious wallets
+// ✅ Fix #5: Rate limiting (5 minute cooldown between withdrawals)
+//
+// Previous vulnerability: Balance check and deduction were not atomic,
+// allowing concurrent requests to bypass balance validation.
+//
+// Attack prevented: Race condition exploit (1.25 SOL stolen with 0.25 SOL balance)
+
+// In-memory rate limiter (for single-server deployment)
+// TODO: Replace with Redis for multi-server deployments
+const withdrawalLimiter = new Map();
+const WITHDRAWAL_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+
+// Cleanup stale rate limit entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [playerId, timestamp] of withdrawalLimiter.entries()) {
+    if (now - timestamp > WITHDRAWAL_COOLDOWN) {
+      withdrawalLimiter.delete(playerId);
+    }
+  }
+}, 10 * 60 * 1000);
+
 // Process withdrawal
 app.post('/api/withdraw', async (req, res) => {
+  const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+
   try {
     const { playerWallet, amount, playerId } = req.body;
 
@@ -134,29 +166,60 @@ app.post('/api/withdraw', async (req, res) => {
       return res.status(400).json({ error: 'Invalid withdrawal amount' });
     }
 
-    // Verify player has sufficient balance in database
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('game_balance, wallet_address')
-      .eq('id', playerId)
+    // ✅ SECURITY FIX #4: Check if wallet is banned
+    const { data: bannedCheck } = await supabase
+      .from('banned_wallets')
+      .select('reason')
+      .eq('wallet_address', playerWallet)
       .single();
 
-    if (playerError || !player) {
-      return res.status(404).json({ error: 'Player not found' });
-    }
-
-    if (player.wallet_address !== playerWallet) {
-      return res.status(403).json({ error: 'Wallet address mismatch' });
-    }
-
-    if (player.game_balance < withdrawAmount) {
-      return res.status(400).json({
-        error: `Insufficient balance. You have ${player.game_balance} SOL`
+    if (bannedCheck) {
+      console.warn(`🚫 Blocked withdrawal attempt from banned wallet: ${playerWallet}`);
+      await logCriticalError({
+        errorType: 'withdrawal',
+        errorMessage: 'Banned wallet attempted withdrawal',
+        errorStack: '',
+        context: { playerWallet, playerId, reason: bannedCheck.reason }
+      });
+      return res.status(403).json({
+        error: 'Wallet address is banned',
+        reason: bannedCheck.reason
       });
     }
 
-    // Create connection to Solana
-    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    // ✅ SECURITY FIX #5: Rate limiting check
+    const lastWithdrawal = withdrawalLimiter.get(playerId);
+    const now = Date.now();
+
+    if (lastWithdrawal && (now - lastWithdrawal) < WITHDRAWAL_COOLDOWN) {
+      const timeLeft = Math.ceil((WITHDRAWAL_COOLDOWN - (now - lastWithdrawal)) / 1000);
+      return res.status(429).json({
+        error: `Please wait ${timeLeft} seconds before next withdrawal`,
+        cooldownSeconds: timeLeft
+      });
+    }
+
+    // ✅ SECURITY FIX #1: Use database function with row locking
+    // This prevents race conditions by locking the player row during balance check + deduction
+    const { data: txData, error: txError } = await supabase.rpc('process_withdrawal', {
+      p_player_id: playerId,
+      p_withdraw_amount: withdrawAmount,
+      p_player_wallet: playerWallet
+    });
+
+    if (txError || !txData || !txData.success) {
+      const errorMsg = txData?.error || txError?.message || 'Withdrawal failed';
+      console.log(`❌ Withdrawal rejected: ${errorMsg}`);
+      return res.status(400).json({ error: errorMsg });
+    }
+
+    // ✅ SECURITY FIX #2: Balance was already deducted in locked transaction above
+    // If blockchain transaction fails below, we refund via refund_withdrawal()
+    const newBalance = txData.new_balance;
+
+    console.log(`💰 Balance deducted (locked transaction): ${withdrawAmount} SOL`);
+    console.log(`   Player: ${playerId.slice(0, 8)}...`);
+    console.log(`   New balance: ${newBalance} SOL`);
 
     // Check treasury balance
     const treasuryBalance = await connection.getBalance(treasuryKeypair.publicKey);
@@ -164,6 +227,12 @@ app.post('/api/withdraw', async (req, res) => {
     const estimatedFee = 5000; // ~0.000005 SOL
 
     if (treasuryBalance < requiredLamports + estimatedFee) {
+      // Refund the deducted balance
+      await supabase.rpc('refund_withdrawal', {
+        p_player_id: playerId,
+        p_amount: withdrawAmount
+      });
+
       return res.status(500).json({
         error: 'Insufficient treasury balance. Please contact support.',
         treasuryBalance: treasuryBalance / LAMPORTS_PER_SOL
@@ -204,36 +273,33 @@ app.post('/api/withdraw', async (req, res) => {
     }, 'confirmed');
 
     if (confirmation.value.err) {
-      throw new Error('Transaction failed: ' + JSON.stringify(confirmation.value.err));
+      // ✅ SECURITY FIX #3: Refund if blockchain transaction fails
+      console.error('❌ Blockchain transaction failed! Refunding...');
+      await supabase.rpc('refund_withdrawal', {
+        p_player_id: playerId,
+        p_amount: withdrawAmount
+      });
+      throw new Error('Blockchain transaction failed: ' + JSON.stringify(confirmation.value.err));
     }
 
     console.log(`✅ Withdrawal confirmed: ${signature}`);
 
-    // Update player balance in database
-    const { error: updateError } = await supabase
-      .from('players')
-      .update({
-        game_balance: Math.max(0, player.game_balance - withdrawAmount),
-      })
-      .eq('id', playerId);
-
-    if (updateError) {
-      console.error('Warning: Transaction succeeded but database update failed:', updateError);
-      // Transaction already sent, so we return success but log the error
-    }
+    // Update rate limiter on successful withdrawal
+    withdrawalLimiter.set(playerId, now);
 
     // Log transaction to history
-    const { error: txError } = await supabase
+    const { error: txHistoryError } = await supabase
       .from('transactions')
       .insert({
         player_id: playerId,
         type: 'withdrawal',
         amount: withdrawAmount,
-        signature: signature
+        signature: signature,
+        status: 'completed'
       });
 
-    if (txError) {
-      console.error('Warning: Failed to log transaction history:', txError);
+    if (txHistoryError) {
+      console.error('Warning: Failed to log transaction history:', txHistoryError);
     }
 
     // Generate explorer URL based on network
@@ -243,7 +309,7 @@ app.post('/api/withdraw', async (req, res) => {
       success: true,
       signature,
       amount: withdrawAmount,
-      recipient: playerWallet,
+      newBalance: newBalance,
       explorerUrl: `https://explorer.solana.com/tx/${signature}${clusterParam}`
     });
 
