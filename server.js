@@ -81,12 +81,178 @@ async function logCriticalError({ errorType, errorMessage, errorStack, context =
       context: context
     });
     console.error(`[CRITICAL ERROR] ${errorType}: ${errorMessage}`);
+
+    // Send real-time notification
+    await sendSecurityAlert({
+      errorType,
+      errorMessage,
+      context
+    });
   } catch (logError) {
     // If logging fails, at least console.error it
     console.error('Failed to log critical error:', logError);
     console.error('Original error:', errorMessage);
   }
 }
+
+// ==============================================
+// REAL-TIME ALERT SYSTEM
+// ==============================================
+
+/**
+ * Send security alerts via email and/or Slack
+ * Configure in environment variables:
+ * - ALERT_EMAIL: Your email for notifications
+ * - SLACK_WEBHOOK_URL: Slack incoming webhook URL
+ * - RESEND_API_KEY: Resend API key for emails
+ */
+async function sendSecurityAlert({ errorType, errorMessage, context }) {
+  const timestamp = new Date().toISOString();
+  const alertEmail = process.env.ALERT_EMAIL;
+  const slackWebhook = process.env.SLACK_WEBHOOK_URL;
+  const resendKey = process.env.RESEND_API_KEY;
+
+  // Format alert message
+  const alertMessage = `
+🚨 WARFOG.IO SECURITY ALERT
+
+Type: ${errorType}
+Time: ${timestamp}
+Message: ${errorMessage}
+
+Context:
+${JSON.stringify(context, null, 2)}
+
+Dashboard: https://warfog.io/admin
+  `.trim();
+
+  // Send Slack notification if configured
+  if (slackWebhook) {
+    try {
+      await fetch(slackWebhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: '🚨 *WARFOG.IO SECURITY ALERT*',
+          blocks: [
+            {
+              type: 'header',
+              text: {
+                type: 'plain_text',
+                text: '🚨 CRITICAL SECURITY ALERT',
+                emoji: true
+              }
+            },
+            {
+              type: 'section',
+              fields: [
+                {
+                  type: 'mrkdwn',
+                  text: `*Type:*\n${errorType}`
+                },
+                {
+                  type: 'mrkdwn',
+                  text: `*Time:*\n${new Date(timestamp).toLocaleString()}`
+                }
+              ]
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*Message:*\n${errorMessage}`
+              }
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*Context:*\n\`\`\`${JSON.stringify(context, null, 2)}\`\`\``
+              }
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: {
+                    type: 'plain_text',
+                    text: '🔍 View Dashboard',
+                    emoji: true
+                  },
+                  url: 'https://warfog.io/admin',
+                  style: 'danger'
+                }
+              ]
+            }
+          ]
+        })
+      });
+      console.log('✅ Slack alert sent');
+    } catch (slackError) {
+      console.error('Failed to send Slack alert:', slackError.message);
+    }
+  }
+
+  // Send email notification if configured
+  if (alertEmail && resendKey) {
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: 'WARFOG.IO Security <onboarding@resend.dev>',
+          to: [alertEmail],
+          subject: `🚨 WARFOG.IO ALERT: ${errorType}`,
+          text: alertMessage
+        })
+      });
+      console.log('✅ Email alert sent to:', alertEmail);
+    } catch (emailError) {
+      console.error('Failed to send email alert:', emailError.message);
+    }
+  }
+
+  // If no notification methods configured, just log
+  if (!slackWebhook && !alertEmail) {
+    console.warn('⚠️ No alert methods configured! Set SLACK_WEBHOOK_URL or ALERT_EMAIL + RESEND_API_KEY');
+  }
+}
+
+// ==============================================
+// AUTOMATED SECURITY MONITORING
+// ==============================================
+// Runs every 5 minutes to check for suspicious patterns
+
+setInterval(async () => {
+  try {
+    const { data: alerts } = await supabase.rpc('check_suspicious_withdrawals');
+
+    if (alerts && alerts.length > 0) {
+      for (const alert of alerts) {
+        console.warn(`⚠️ SUSPICIOUS ACTIVITY DETECTED: ${alert.alert_reason}`);
+        console.warn(`   Player: ${alert.player_id}`);
+        console.warn(`   Wallet: ${alert.wallet_address}`);
+
+        await sendSecurityAlert({
+          errorType: 'SUSPICIOUS_WITHDRAWAL',
+          errorMessage: `${alert.alert_reason}: Player ${alert.wallet_address}`,
+          context: {
+            playerId: alert.player_id,
+            walletAddress: alert.wallet_address,
+            alertReason: alert.alert_reason,
+            details: alert.details
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('❌ Automated monitoring error:', error);
+  }
+}, 5 * 60 * 1000); // Check every 5 minutes
 
 // ==============================================
 // API ENDPOINTS
@@ -1796,6 +1962,53 @@ app.get('/api/admin/:secretPath/errors', async (req, res) => {
   } catch (error) {
     console.error('Error logs fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch error logs' });
+  }
+});
+
+// Security alerts endpoint (protected)
+app.get('/api/admin/:secretPath/security-alerts', async (req, res) => {
+  try {
+    const { secretPath } = req.params;
+
+    if (secretPath !== process.env.ADMIN_SECRET_PATH) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Check for suspicious withdrawal patterns
+    const { data: suspiciousWithdrawals } = await supabase.rpc('check_suspicious_withdrawals');
+
+    // Get recent banned wallet attempts
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: bannedAttempts } = await supabase
+      .from('error_logs')
+      .select('*')
+      .eq('error_type', 'withdrawal')
+      .eq('error_message', 'Banned wallet attempted withdrawal')
+      .gte('created_at', oneHourAgo)
+      .order('created_at', { ascending: false });
+
+    // Get rate-limited attempts (429 errors)
+    const { data: rateLimited } = await supabase
+      .from('error_logs')
+      .select('*')
+      .ilike('error_message', '%429%Too Many Requests%')
+      .gte('created_at', oneHourAgo)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    res.json({
+      success: true,
+      alerts: {
+        suspiciousWithdrawals: suspiciousWithdrawals || [],
+        bannedWalletAttempts: bannedAttempts || [],
+        rateLimitedAttempts: rateLimited || [],
+        totalAlerts: (suspiciousWithdrawals?.length || 0) + (bannedAttempts?.length || 0) + (rateLimited?.length || 0)
+      }
+    });
+
+  } catch (error) {
+    console.error('Security alerts fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch security alerts' });
   }
 });
 

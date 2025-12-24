@@ -20,6 +20,13 @@ interface ErrorLog {
   context: any;
 }
 
+interface SecurityAlerts {
+  suspiciousWithdrawals: any[];
+  bannedWalletAttempts: any[];
+  rateLimitedAttempts: any[];
+  totalAlerts: number;
+}
+
 interface AdminStatusPageProps {
   onClose: () => void;
 }
@@ -27,6 +34,7 @@ interface AdminStatusPageProps {
 export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [errors, setErrors] = useState<ErrorLog[]>([]);
+  const [securityAlerts, setSecurityAlerts] = useState<SecurityAlerts | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -54,10 +62,28 @@ export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => 
     }
   };
 
+  // Fetch security alerts
+  const fetchSecurityAlerts = async () => {
+    try {
+      const response = await fetch(`${backendUrl}/api/admin/${secretPath}/security-alerts`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setSecurityAlerts(data.alerts);
+      }
+    } catch (error) {
+      console.error('Error fetching security alerts:', error);
+    }
+  };
+
   // Auto-refresh every 10 seconds
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 10000);
+    fetchSecurityAlerts();
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchSecurityAlerts();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -210,6 +236,89 @@ export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => 
             value={stats.queueDepth}
             icon="⏳"
           />
+        </div>
+      )}
+
+      {/* Security Alerts Panel */}
+      {securityAlerts && securityAlerts.totalAlerts > 0 && (
+        <div className="bg-yellow-900/20 border-2 border-yellow-700 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-bold mb-4 text-yellow-500 flex items-center gap-2">
+            ⚠️ SECURITY ALERTS
+            <span className="text-lg text-gray-500">({securityAlerts.totalAlerts})</span>
+          </h2>
+
+          {/* Suspicious Withdrawals */}
+          {securityAlerts.suspiciousWithdrawals.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-yellow-400 mb-2 uppercase">
+                🔍 Suspicious Withdrawal Patterns ({securityAlerts.suspiciousWithdrawals.length})
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {securityAlerts.suspiciousWithdrawals.map((alert: any, idx: number) => (
+                  <div key={idx} className="bg-gray-950 border border-yellow-700 rounded p-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs font-bold rounded">
+                        {alert.alert_reason}
+                      </span>
+                      <span className="text-gray-500 text-xs font-mono">
+                        {alert.wallet_address?.slice(0, 8)}...{alert.wallet_address?.slice(-4)}
+                      </span>
+                    </div>
+                    <pre className="text-xs text-gray-400 overflow-x-auto">
+                      {JSON.stringify(alert.details, null, 2)}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Banned Wallet Attempts */}
+          {securityAlerts.bannedWalletAttempts.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-red-400 mb-2 uppercase">
+                🚫 Banned Wallet Attempts ({securityAlerts.bannedWalletAttempts.length})
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {securityAlerts.bannedWalletAttempts.map((attempt: ErrorLog) => (
+                  <div key={attempt.id} className="bg-gray-950 border border-red-700 rounded p-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-gray-400 text-xs">
+                        {new Date(attempt.created_at).toLocaleString()}
+                      </span>
+                      <span className="text-red-400 text-xs font-mono">
+                        {attempt.context?.playerWallet?.slice(0, 8)}...
+                      </span>
+                    </div>
+                    <p className="text-gray-500 text-xs">{attempt.context?.reason}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Rate Limited Attempts */}
+          {securityAlerts.rateLimitedAttempts.length > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-orange-400 mb-2 uppercase">
+                ⏱️ Rate Limited Attempts ({securityAlerts.rateLimitedAttempts.length})
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {securityAlerts.rateLimitedAttempts.slice(0, 5).map((attempt: ErrorLog) => (
+                  <div key={attempt.id} className="bg-gray-950 border border-orange-700 rounded p-3">
+                    <div className="flex justify-between items-start">
+                      <span className="text-gray-400 text-xs">
+                        {new Date(attempt.created_at).toLocaleString()}
+                      </span>
+                      <span className="text-orange-400 text-xs font-mono">
+                        {attempt.context?.playerWallet?.slice(0, 8)}...
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
