@@ -3,7 +3,8 @@ import { supabase, Player, Match, GameState, MatchmakingQueue } from './supabase
 // ============ PLAYER OPERATIONS ============
 
 export async function createGuestPlayer(): Promise<Player | null> {
-  const guestName = `GUEST_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  // Empty username to encourage user to set their own nickname
+  const guestName = '';
 
   const { data, error } = await supabase
     .from('players')
@@ -63,7 +64,10 @@ export async function updatePlayerWallet(
 ): Promise<Player | null> {
   const { data, error } = await supabase
     .from('players')
-    .update({ wallet_address: walletAddress })
+    .update({
+      wallet_address: walletAddress,
+      is_guest: false // Mark as registered user when wallet is connected
+    })
     .eq('id', playerId)
     .select()
     .single();

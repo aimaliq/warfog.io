@@ -76,11 +76,12 @@ const INITIAL_GAME_STATE: GameState = {
 };
 
 export default function App() {
-  const { player: dbPlayer, isLoading } = usePlayer();
+  const { player: dbPlayer, isLoading, refreshPlayer } = usePlayer();
   const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
   const [activeTab, setActiveTab] = useState('play');
   const [showAdmin, setShowAdmin] = useState(false);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
 
   // Audio ref for lobby music
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -108,13 +109,26 @@ export default function App() {
 
   // Retry audio playback when player connects (user interaction)
   useEffect(() => {
-    if (dbPlayer && audioRef.current) {
+    if (dbPlayer && audioRef.current && !isMuted) {
       // User has interacted by connecting wallet - try to play audio
       audioRef.current.play().catch(() => {
         // Still blocked, user needs to click somewhere
       });
     }
-  }, [dbPlayer]);
+  }, [dbPlayer, isMuted]);
+
+  // Handle mute/unmute
+  useEffect(() => {
+    if (!audioRef.current) return;
+
+    if (isMuted) {
+      audioRef.current.pause();
+    } else if (gameState.phase === GamePhase.LOBBY) {
+      audioRef.current.play().catch(() => {
+        // Autoplay blocked
+      });
+    }
+  }, [isMuted, gameState.phase]);
 
   // Check for admin access via URL hash
   useEffect(() => {
@@ -137,7 +151,7 @@ export default function App() {
 
   // Pause music during battles, resume in lobby
   useEffect(() => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || isMuted) return;
 
     if (gameState.phase === GamePhase.LOBBY) {
       // In lobby - play music
@@ -148,7 +162,7 @@ export default function App() {
       // In battle - pause music
       audioRef.current.pause();
     }
-  }, [gameState.phase]);
+  }, [gameState.phase, isMuted]);
 
   // Update game state when database player loads or clears
   useEffect(() => {
@@ -243,7 +257,7 @@ export default function App() {
 
     // During gameplay, always show battle screen regardless of tab
     if (gameState.phase !== GamePhase.LOBBY) {
-      return <BattleScreen gameState={gameState} setGameState={setGameState} matchId={currentMatchId} />;
+      return <BattleScreen gameState={gameState} setGameState={setGameState} matchId={currentMatchId} onRefreshPlayer={refreshPlayer} />;
     }
 
     // In lobby, show content based on active tab
@@ -257,6 +271,8 @@ export default function App() {
           }}
           onPlayerUpdate={handlePlayerUpdate}
           isInBattle={gameState.phase !== GamePhase.LOBBY}
+          isMuted={isMuted}
+          onToggleMute={() => setIsMuted(!isMuted)}
         />
       );
     } else if (activeTab === 'sol') {

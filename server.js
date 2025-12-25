@@ -1337,22 +1337,50 @@ app.post('/api/game/submit-turn', async (req, res) => {
           })
           .eq('id', matchId);
 
-        // Update player stats
+        // Update player stats with Elo rating changes
         if (winnerId) {
           const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
 
-          // Winner stats
+          // Fetch both players' current ratings
+          const { data: winnerData } = await supabase
+            .from('players')
+            .select('rating')
+            .eq('id', winnerId)
+            .single();
+
+          const { data: loserData } = await supabase
+            .from('players')
+            .select('rating')
+            .eq('id', loserId)
+            .single();
+
+          const winnerRating = winnerData?.rating || 500;
+          const loserRating = loserData?.rating || 500;
+
+          // Calculate Elo rating changes (K-factor = 16)
+          const K = 16;
+          const winnerExpected = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400));
+          const loserExpected = 1 / (1 + Math.pow(10, (winnerRating - loserRating) / 400));
+
+          const winnerRatingChange = Math.round(K * (1 - winnerExpected));
+          const loserRatingChange = Math.round(K * (0 - loserExpected));
+
+          console.log(`📊 Rating changes: Winner ${winnerRating} → ${winnerRating + winnerRatingChange} (+${winnerRatingChange}), Loser ${loserRating} → ${loserRating + loserRatingChange} (${loserRatingChange})`);
+
+          // Winner stats + rating
           await supabase.rpc('increment_player_stats', {
             p_player_id: winnerId,
             p_wins: 1,
-            p_losses: 0
+            p_losses: 0,
+            p_rating_change: winnerRatingChange
           });
 
-          // Loser stats
+          // Loser stats + rating
           await supabase.rpc('increment_player_stats', {
             p_player_id: loserId,
             p_wins: 0,
-            p_losses: 1
+            p_losses: 1,
+            p_rating_change: loserRatingChange
           });
         }
 

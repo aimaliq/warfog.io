@@ -18,25 +18,32 @@ interface PlayPageProps {
   onStartBattle: (matchId?: string) => void;
   onPlayerUpdate?: (updates: Partial<Player>) => void;
   isInBattle?: boolean;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
 }
 
-export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPlayerUpdate, isInBattle = false }) => {
+export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPlayerUpdate, isInBattle = false, isMuted = false, onToggleMute }) => {
   const { connected, publicKey } = useWallet();
   const { activities } = useActivityFeed('free');
   const { onlineCount, isLoading } = useOnlinePlayers();
   const [isHowToPlayOpen, setIsHowToPlayOpen] = useState(false);
-  const [editUsername, setEditUsername] = useState(player.username);
+  const [editUsername, setEditUsername] = useState(player.username === 'COMMANDER_ALPHA' ? '' : player.username);
   const [editCountry, setEditCountry] = useState(player.countryFlag);
   const [isSaving, setIsSaving] = useState(false);
+  const [prevPlayerId, setPrevPlayerId] = useState(player.id);
 
   // players simulation
   const [fPlayers, setFPlayers] = useState<number>(0);
 
-  // Sync local state with player prop changes (for immediate UI updates on wallet connect/disconnect)
+  // Update local state when player prop changes (e.g., wallet disconnect creates new guest)
   useEffect(() => {
-    setEditUsername(player.username);
-    setEditCountry(player.countryFlag);
-  }, [player.username, player.countryFlag]);
+    // If player ID changed (new guest after wallet disconnect), update immediately
+    if (player.id !== prevPlayerId) {
+      setPrevPlayerId(player.id);
+      setEditUsername(player.username === 'COMMANDER_ALPHA' ? '' : player.username);
+      setEditCountry(player.countryFlag);
+    }
+  }, [player.id, player.username, player.countryFlag, prevPlayerId]);
 
   // Fake player simulation
   useEffect(() => {
@@ -113,8 +120,20 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
     <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
       <div className="w-full max-w-2xl">
 
-        {/* Header - Wallet Button Only */}
-        <div className="mb-8 flex items-center justify-end">
+        {/* Header - Volume Button (left) and Wallet Button (right) */}
+        <div className="mb-8 flex items-center justify-between">
+          {/* Volume Toggle Button */}
+          {onToggleMute && (
+            <button
+              onClick={onToggleMute}
+              className="p-3 bg-gray-900/60 border border-lime-900 hover:border-lime-500 rounded transition-all group"
+              title={isMuted ? "Unmute music" : "Mute music"}
+            >
+              <span className="material-icons-outlined text-lime-500 group-hover:text-lime-400 text-2xl">
+                {isMuted ? 'volume_off' : 'volume_up'}
+              </span>
+            </button>
+          )}
           <WalletButton className="wallet-custom" />
         </div>
 
@@ -245,8 +264,9 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                 onChange={(e) => setEditUsername(e.target.value)}
                 onBlur={handleSaveProfile}
                 maxLength={20}
-                className="w-full bg-gray-900 border text-sm border-lime-900 text-lime-500 px-4 py-3 h-12 font-mono focus:outline-none focus:border-lime-500 rounded"
-                placeholder="Enter nickname"
+                autoFocus={player.isGuest && !editUsername}
+                className="w-full bg-gray-900 border text-sm border-lime-900 text-lime-500 px-4 py-3 h-12 font-mono focus:outline-none focus:border-lime-500 rounded placeholder:text-gray-600 placeholder:italic"
+                placeholder="Enter your nickname"
               />
             </div>
           </div>

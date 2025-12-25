@@ -7,7 +7,7 @@ export const TermsPage: React.FC = () => {
 
         {/* Header */}
         <h1 className="text-3xl font-black text-lime-500 mb-2">TERMS OF SERVICE</h1>
-        <p className="text-sm text-gray-500 mb-8">Last Updated: December 2025</p>
+        <p className="text-xs text-gray-500 mb-8">Last Updated: December 2025</p>
 
         {/* Content */}
         <div className="bg-black/60 border-2 border-lime-900 p-6 space-y-6 text-sm text-gray-300 leading-relaxed">
@@ -36,20 +36,56 @@ export const TermsPage: React.FC = () => {
           {/* 3. Game Rules */}
           <section>
             <h2 className="text-lime-500 font-bold text-lg mb-2">3. GAME RULES & MECHANICS</h2>
-            <p className="mb-2">WARFOG.IO is a strategic defense game where:</p>
+            <p className="mb-2">WARFOG.IO is a turn-based strategic defense game where:</p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Players defend their nuclear silos while attacking opponent silos</li>
-              <li>Each player has 5 silos with 2 HP each</li>
+              <li>Each player has 5 silos starting with 100 HP each</li>
               <li>Players select 2 silos to defend and 3 enemy silos to attack each turn</li>
-              <li>First player to destroy 3 enemy silos wins</li>
-              <li>Matches have a 10-second turn timer</li>
-              <li>Fog of war: You cannot see enemy HP or defended silos</li>
+              <li>Each hit on an undefended silo reduces its HP by 50</li>
+              <li>Successfully attacking a silo grants +1 HP to allocate to your own defenses</li>
+              <li>First player to destroy 3 enemy silos (reduce to 0 HP) wins</li>
+              <li>Matches have turn phases: 10s turns</li>
+              <li>Fog of war: You cannot see enemy HP or defended silos until resolution</li>
             </ul>
           </section>
 
-          {/* 4. Wallet Connection */}
+          {/* 4. Elo Rating System */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">4. WALLET CONNECTION & AUTHENTICATION</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">4. RATING SYSTEM</h2>
+            <p className="mb-2">
+              WARFOG.IO uses a competitive rating system to rank players and match opponents:
+            </p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li>New players start at a rating of 500</li>
+              <li>Ratings are updated after every match</li>
+              <li>Rating changes are calculated using a formula with K-factor of 16</li>
+              <li>Defeating higher-rated opponents earns more rating points than defeating lower-rated opponents</li>
+              <li>Rating cannot drop below 100 (minimum)</li>
+              <li>Ties/stalemates result in no rating change for either player</li>
+              <li>The global leaderboard is sorted by rating (highest to lowest)</li>
+              <li>Your rank is determined by your rating compared to all registered players</li>
+            </ul>
+            <p className="mt-2 text-xs text-yellow-500 ml-4">
+              Example: Win against equal opponent (+8), loss against equal opponent (-8),
+              win as underdog (+12), loss as underdog (-4).
+            </p>
+          </section>
+
+          {/* 5. Match Types */}
+          <section>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">5. MATCH TYPES</h2>
+            <p className="mb-2">The Platform offers two types of matches:</p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li><span className="text-lime-500 font-bold">Free Matches (0 SOL):</span> No SOL required, affects rating only, available to all players including guests</li>
+              <li><span className="text-lime-500 font-bold">Wagered Matches (0.01+ SOL):</span> Requires SOL deposit, winner receives 95% of pot (5% platform fee), affects Elo rating, requires connected wallet</li>
+              <li>Bot matches are available when no human opponents are found in matchmaking</li>
+              <li>All matches count toward your win/loss record and rating</li>
+            </ul>
+          </section>
+
+          {/* 6. Wallet Connection */}
+          <section>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">6. WALLET AUTHENTICATION</h2>
             <p className="mb-2">
               The Platform uses Solana wallet authentication for user and transaction verifications:
             </p>
@@ -57,14 +93,14 @@ export const TermsPage: React.FC = () => {
               <li>You are the sole responsible for securing your own wallet and private keys</li>
               <li>The Platform does not store or have access to your private keys</li>
               <li>You can play as a guest without connecting a wallet (free matches only)</li>
-              <li>Wallet connection is required for wagered matches, deposits, and withdrawals</li>
+              <li>Wallet connection is required for wagered matches, deposits, withdrawals, and leaderboard ranking</li>
               <li>The Platform does not control your wallet - all transactions require your explicit approval</li>
             </ul>
           </section>
 
-          {/* 5. Deposits & Withdrawals */}
+          {/* 7. Deposits & Withdrawals */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">5. DEPOSITS & WITHDRAWALS</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">7. DEPOSITS & WITHDRAWALS</h2>
             <p className="mb-2">When using wagered match features:</p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Deposits: You transfer SOL from your wallet to your game balance</li>
@@ -72,14 +108,14 @@ export const TermsPage: React.FC = () => {
               <li>Withdrawals: You can request to withdraw SOL from your game balance to your wallet at any time</li>
               <li>All blockchain transactions are irreversible</li>
               <li>You are responsible for network fees (gas)</li>
-              <li>Minimum bet amount: {import.meta.env.VITE_MIN_BET_AMOUNT || 0.1} SOL</li>
-              <li>Maximum bet amount: {import.meta.env.VITE_MAX_BET_AMOUNT || 1.0} SOL</li>
+              <li>Minimum bet amount: 0.01 SOL</li>
+              <li>Maximum bet amount: 5 SOL</li>
             </ul>
           </section>
 
-          {/* 6. Platform Fees */}
+          {/* 8. Platform Fees */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lime-500 text-lg mb-2">6. PLATFORM FEES</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">8. PLATFORM FEES</h2>
             <p className="mb-2">
               The Platform charges a 5% fee on wagered matches:
             </p>
@@ -92,9 +128,9 @@ export const TermsPage: React.FC = () => {
             </ul>
           </section>
 
-          {/* 7. Prohibited Conduct */}
+          {/* 9. Prohibited Conduct */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">7. PROHIBITED CONDUCT</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">9. PROHIBITED CONDUCT</h2>
             <p className="mb-2">You may NOT:</p>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>Use bots, scripts, or automated tools to play matches</li>
@@ -105,13 +141,13 @@ export const TermsPage: React.FC = () => {
               <li>Reverse engineer or attempt to hack the Platform</li>
             </ul>
             <p className="mt-2">
-              Violation of these terms may result in account suspension and forfeiture of funds.
+              Violation of these terms may result in account ban and forfeiture of funds.
             </p>
           </section>
 
-          {/* 8. Intellectual Property */}
+          {/* 10. Intellectual Property */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">8. INTELLECTUAL PROPERTY</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">10. INTELLECTUAL PROPERTY</h2>
             <p>
               All content, graphics, code, and game mechanics on the Platform are owned by WARFOG.IO and
               protected by copyright and intellectual property laws. You may not copy, reproduce, or distribute
@@ -119,9 +155,9 @@ export const TermsPage: React.FC = () => {
             </p>
           </section>
 
-          {/* 9. Disclaimers */}
+          {/* 11. Disclaimers */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">9. DISCLAIMERS & RISKS</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">11. DISCLAIMERS & RISKS</h2>
             <ul className="list-disc list-inside space-y-1 ml-4">
               <li>The Platform is provided "AS IS" without warranties of any kind</li>
               <li>Cryptocurrency and blockchain transactions carry inherent risks</li>
@@ -133,9 +169,9 @@ export const TermsPage: React.FC = () => {
             </ul>
           </section>
 
-          {/* 10. Limitation of Liability */}
+          {/* 12. Limitation of Liability */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">10. LIMITATION OF LIABILITY</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">12. LIMITATION OF LIABILITY</h2>
             <p>
               TO THE MAXIMUM EXTENT PERMITTED BY LAW, WARFOG.IO AND ITS OPERATORS SHALL NOT BE LIABLE
               FOR ANY INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOSS OF FUNDS,
@@ -147,9 +183,9 @@ export const TermsPage: React.FC = () => {
             </p>
           </section>
 
-          {/* 11. Dispute Resolution */}
+          {/* 13. Dispute Resolution */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">11. DISPUTE RESOLUTION</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">13. DISPUTE RESOLUTION</h2>
             <p>
               Any disputes arising from these Terms shall be resolved through binding arbitration in accordance
               with the rules of the American Arbitration Association. You waive your right to participate in
@@ -157,9 +193,9 @@ export const TermsPage: React.FC = () => {
             </p>
           </section>
 
-          {/* 12. Changes to Terms */}
+          {/* 14. Changes to Terms */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">12. CHANGES TO TERMS</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">14. CHANGES TO TERMS</h2>
             <p>
               We reserve the right to modify these Terms at any time. Changes will be posted on this page with
               an updated "Last Updated" date. Your continued use of the Platform after changes constitutes
@@ -167,9 +203,9 @@ export const TermsPage: React.FC = () => {
             </p>
           </section>
 
-          {/* 13. Termination */}
+          {/* 15. Termination */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">13. TERMINATION</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">15. TERMINATION</h2>
             <p>
               We may suspend or terminate your account at any time for violation of these Terms or at our sole
               discretion. Upon termination, you may withdraw any remaining funds from your game balance, subject
@@ -177,9 +213,9 @@ export const TermsPage: React.FC = () => {
             </p>
           </section>
 
-          {/* 14. Contact */}
+          {/* 16. Contact */}
           <section>
-            <h2 className="text-lime-500 font-bold text-lg mb-2">14. CONTACT INFORMATION</h2>
+            <h2 className="text-lime-500 font-bold text-lg mb-2">16. CONTACT INFORMATION</h2>
             <p className="mb-2">For questions about these Terms, contact us:</p>
             <ul className="list-none space-y-1">
               <li>X: <a href="https://x.com/warfog_io" target="_blank" rel="noopener noreferrer" className="text-lime-500 hover:underline">@warfog_io</a></li>

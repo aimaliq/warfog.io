@@ -359,7 +359,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         <h1 className="hidden lg:block text-3xl font-black text-lime-500 mb-8">PROFILE</h1>
 
         {/* Profile Card */}
-        <div className="bg-black/60 p-6 mb-6">
+        <div className="bg-black/60 p-6">
           <div className="flex items-center gap-6 mb-6">
             <button className="hover:scale-110 transition-transform">
               <FlagIcon countryCode={currentCountry} width="66px" height="42px" />
@@ -658,16 +658,17 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-3 mb-3 mr-2 ml-2">
+          {/* Row 1: Battles, Rank, Rating */}
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">BATTLES</div>
-            <div className="text-3xl text-lime-500 font-black font-mono">{player.gamesPlayed}</div>
+            <div className="text-2xl text-lime-500 font-black font-mono">{player.gamesPlayed}</div>
           </div>
 
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-2 tracking-widest">RANK</div>
             <div className="flex justify-between items-center">
-              <div className="text-3xl text-lime-500 font-black font-mono">
+              <div className="text-2xl text-lime-500 font-black font-mono">
                 {player.isGuest ? '—' : isLoadingRank ? '#' : globalRank ? `#${globalRank}` : '—'}
               </div>
             </div>
@@ -680,33 +681,24 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           </div>
 
           <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">RATING</div>
+            <div className="text-2xl text-yellow-400 font-black font-mono">{player.rating || 500}</div>
+          </div>
+
+          {/* Row 2: Victories, SOL Won, Win Rate */}
+          <div className="bg-black/60 p-4">
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">VICTORIES</div>
+            <div className="text-2xl text-lime-500 font-black font-mono">{player.wins}</div>
+          </div>
+
+          <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">SOL WON</div>
-            <div className="text-3xl text-lime-500 font-black font-mono">{(player.totalSolWon || 0).toFixed(2)}</div>
+            <div className="text-2xl text-lime-500 font-black font-mono">{(player.totalSolWon || 0).toFixed(2)}</div>
           </div>
 
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">WIN RATE</div>
-            <div className="text-3xl text-lime-500 font-black font-mono">{winRate}%</div>
-          </div>
-
-          <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">VICTORIES</div>
-            <div className="text-3xl text-lime-500 font-black font-mono">{player.wins}</div>
-          </div>
-
-          <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-400 mb-2 tracking-widest flex items-center gap-1">
-              <span className="material-icons-outlined text-xs text-gray-400">local_fire_department</span>
-              STREAK
-            </div>
-            <div className="text-3xl text-lime-500 font-black font-mono">
-              {player.longestStreak}
-            </div>
-          </div>
-
-          <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">RATING</div>
-            <div className="text-3xl text-yellow-400 font-black font-mono">{player.rating || 500}</div>
+            <div className="text-2xl text-lime-500 font-black font-mono">{winRate}%</div>
           </div>
         </div>
 

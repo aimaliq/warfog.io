@@ -9,10 +9,10 @@ interface NavigationProps {
 
 export const Navigation: React.FC<NavigationProps> = ({ activeTab, onChange, isInMatch, onForfeit }) => {
   const navItems = [
-    { id: 'play', icon: 'sports_esports', label: 'PLAY' },
-    { id: 'sol', icon: 'paid', label: 'SOL' },
-    { id: 'leaderboard', icon: 'emoji_events', label: 'LEADERBOARD' },
-    { id: 'profile', icon: 'badge', label: 'PROFILE' }
+    { id: 'play', icon: 'play_circle', label: 'PLAY' },
+    { id: 'sol', icon: 'attach_money', label: 'SOL' },
+    { id: 'leaderboard', icon: 'leaderboard', label: 'LEADERBOARD' },
+    { id: 'profile', icon: 'person', label: 'PROFILE' }
   ];
 
   const handleNavClick = (tabId: string) => {
@@ -28,7 +28,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, onChange, isI
     <>
       {/* Mobile/Tablet: Bottom Navigation (hidden on desktop) */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-lime-900 backdrop-blur-md z-40 pb-safe">
-        <div className="flex justify-around items-center h-16 max-w-md mx-auto">
+        <div className="flex justify-around items-center h-17 max-w-md mx-auto">
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -41,10 +41,10 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, onChange, isI
                     : 'text-gray-400 hover:text-gray-300'
               }`}
             >
-              <span className="material-icons-outlined text-2xl mb-1">{item.icon}</span>
-              <span className="text-[10px] font-bold tracking-widest">{item.label}</span>
+              <span className="material-icons-outlined text-2xl mt-2">{item.icon}</span>
+              <span className="text-[11px] font-bold tracking-widest mb-3">{item.label}</span>
               {!isInMatch && activeTab === item.id && (
-                <div className="absolute bottom-0 w-12 h-1 bg-lime-500 shadow-[0_0_10px_rgba(163,230,53,0.5)]"></div>
+                <div className="absolute bottom-0 w-12 h-2 bg-lime-500 shadow-[0_0_10px_rgba(163,230,53,0.5)]"></div>
               )}
             </button>
           ))}

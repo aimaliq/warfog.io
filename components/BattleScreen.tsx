@@ -92,6 +92,7 @@ interface BattleScreenProps {
   gameState: GameState;
   setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   matchId?: string | null;
+  onRefreshPlayer?: () => Promise<void>;
 }
 
 // Missile component for visual effects
@@ -225,7 +226,7 @@ const BaseIcon = ({
   );
 };
 
-export default function BattleScreen({ gameState, setGameState, matchId }: BattleScreenProps) {
+export default function BattleScreen({ gameState, setGameState, matchId, onRefreshPlayer }: BattleScreenProps) {
   const player = gameState.player1;
   const enemy = gameState.player2;
 
@@ -1212,10 +1213,8 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                       const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, false);
                       setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
 
-                      // Update database with win/loss and balance changes (only for wagered matches)
-                      if (current.betAmount > 0) {
-                        updateGameResults(current.player1.id, current.player2.id, current.betAmount);
-                      }
+                      // Update database with win/loss, ratings, and balance changes (for all real player matches)
+                      updateGameResults(current.player1.id, current.player2.id, current.betAmount);
                    } else if (pDestroyed >= 3 && eDestroyed < 3) {
                       // Player 2 wins
                       winner = current.player2.id;
@@ -1233,10 +1232,8 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                       const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, true);
                       setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
 
-                      // Update database with win/loss and balance changes (only for wagered matches)
-                      if (current.betAmount > 0) {
-                        updateGameResults(current.player2.id, current.player1.id, current.betAmount);
-                      }
+                      // Update database with win/loss, ratings, and balance changes (for all real player matches)
+                      updateGameResults(current.player2.id, current.player1.id, current.betAmount);
                    } else {
                       // Tie
                       winner = 'TIE';
@@ -1547,7 +1544,19 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                  >{isFreeMatch ? 'REMATCH' : 'REMATCH (0 SOL)'}
                  </button>
                  <button
-                    onClick={() => window.location.reload()}
+                    onClick={async () => {
+                      // Refresh player data to get updated rating
+                      if (onRefreshPlayer) {
+                        await onRefreshPlayer();
+                      }
+                      // Reset to lobby instead of full page reload
+                      setGameState(prev => ({
+                        ...prev,
+                        phase: GamePhase.LOBBY,
+                        winner: null,
+                        winReason: null
+                      }));
+                    }}
                     className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
                  >RETURN BACK
                  </button>
@@ -1663,7 +1672,19 @@ export default function BattleScreen({ gameState, setGameState, matchId }: Battl
                    </button>
                  )}
                  <button
-                    onClick={() => window.location.reload()}
+                    onClick={async () => {
+                      // Refresh player data to get updated rating
+                      if (onRefreshPlayer) {
+                        await onRefreshPlayer();
+                      }
+                      // Reset to lobby instead of full page reload
+                      setGameState(prev => ({
+                        ...prev,
+                        phase: GamePhase.LOBBY,
+                        winner: null,
+                        winReason: null
+                      }));
+                    }}
                     className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
                  >RETURN BACK
                  </button>
