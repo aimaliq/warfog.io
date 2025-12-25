@@ -131,6 +131,81 @@ export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => 
     }
   };
 
+  // Export errors to CSV
+  const handleExportCSV = async () => {
+    setActionLoading('export');
+    try {
+      const response = await fetch(`${backendUrl}/api/admin/${secretPath}/errors?limit=1000`);
+      const data = await response.json();
+
+      if (data.success) {
+        // Convert errors to CSV format
+        const csvHeaders = ['ID', 'Type', 'Severity', 'Message', 'Created At', 'Context'];
+        const csvRows = data.errors.map((error: ErrorLog) => [
+          error.id,
+          error.error_type,
+          'CRITICAL',
+          `"${error.error_message.replace(/"/g, '""')}"`, // Escape quotes
+          new Date(error.created_at).toISOString(),
+          `"${JSON.stringify(error.context).replace(/"/g, '""')}"` // Escape quotes
+        ]);
+
+        const csvContent = [
+          csvHeaders.join(','),
+          ...csvRows.map((row: string[]) => row.join(','))
+        ].join('\n');
+
+        // Create download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute('href', url);
+        link.setAttribute('download', `warfog-errors-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        alert(`✅ Exported ${data.errors.length} errors to CSV`);
+      }
+    } catch (error: any) {
+      alert(`❌ Failed to export errors: ${error.message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Clear all error logs
+  const handleClearErrors = async () => {
+    if (!confirm('⚠️ Are you sure you want to clear ALL error logs?\n\nThis action cannot be undone!')) {
+      return;
+    }
+
+    setActionLoading('clear');
+    try {
+      const response = await fetch(`${backendUrl}/api/admin/${secretPath}/errors/clear`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`✅ Cleared ${data.deletedCount} error logs`);
+        setErrors([]); // Update UI
+        fetchStats(); // Refresh stats
+      } else {
+        alert(`❌ Failed to clear errors: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`❌ Failed to clear errors: ${error.message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-950 text-lime-500 font-mono p-6 flex items-center justify-center">
@@ -324,10 +399,30 @@ export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => 
 
       {/* Recent Critical Errors */}
       <div className="bg-gray-900 border-2 border-red-900 rounded-lg p-6">
-        <h2 className="text-xl font-bold mb-4 text-red-500 flex items-center gap-2">
-           CRITICAL ERRORS
-          <span className="text-lg text-gray-500">({errors.length})</span>
-        </h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+          <h2 className="text-xl font-bold text-red-500 flex items-center gap-2">
+             CRITICAL ERRORS
+            <span className="text-lg text-gray-500">({errors.length})</span>
+          </h2>
+          {errors.length > 0 && (
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                onClick={handleExportCSV}
+                disabled={actionLoading !== null}
+                className="flex-1 sm:flex-none px-4 py-2 bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-600 text-blue-400 font-bold rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {actionLoading === 'export' ? '⏳ EXPORTING...' : '📥 EXPORT CSV'}
+              </button>
+              <button
+                onClick={handleClearErrors}
+                disabled={actionLoading !== null}
+                className="flex-1 sm:flex-none px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border-2 border-red-600 text-red-400 font-bold rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {actionLoading === 'clear' ? '⏳ CLEARING...' : '🗑️ CLEAR ERRORS'}
+              </button>
+            </div>
+          )}
+        </div>
 
         {errors.length === 0 ? (
           <div className="text-left py-8">

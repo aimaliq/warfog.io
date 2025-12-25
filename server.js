@@ -1966,6 +1966,40 @@ app.get('/api/admin/:secretPath/errors', async (req, res) => {
   }
 });
 
+// Clear all error logs (protected)
+app.delete('/api/admin/:secretPath/errors/clear', async (req, res) => {
+  try {
+    const { secretPath } = req.params;
+
+    if (secretPath !== process.env.ADMIN_SECRET_PATH) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Delete all error logs
+    const { data, error } = await supabase
+      .from('error_logs')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all rows
+
+    if (error) {
+      console.error('Error clearing logs:', error);
+      return res.status(500).json({ error: 'Failed to clear error logs' });
+    }
+
+    console.log('🗑️ Admin cleared all error logs');
+
+    res.json({
+      success: true,
+      message: 'All error logs cleared',
+      deletedCount: data?.length || 0
+    });
+
+  } catch (error) {
+    console.error('Error clearing logs:', error);
+    res.status(500).json({ error: 'Failed to clear error logs' });
+  }
+});
+
 // Security alerts endpoint (protected)
 app.get('/api/admin/:secretPath/security-alerts', async (req, res) => {
   try {
