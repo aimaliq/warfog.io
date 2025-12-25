@@ -206,6 +206,105 @@ export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => 
     }
   };
 
+  // Export security alerts to CSV
+  const handleExportSecurityAlerts = async () => {
+    if (!securityAlerts) return;
+
+    setActionLoading('export-alerts');
+    try {
+      const csvRows: string[][] = [];
+
+      // Add headers
+      csvRows.push(['Alert Type', 'Timestamp', 'Wallet Address', 'Reason', 'Details']);
+
+      // Add banned wallet attempts
+      securityAlerts.bannedWalletAttempts.forEach((attempt: ErrorLog) => {
+        csvRows.push([
+          'Banned Wallet',
+          new Date(attempt.created_at).toISOString(),
+          attempt.context?.playerWallet || 'N/A',
+          attempt.context?.reason || 'N/A',
+          JSON.stringify(attempt.context)
+        ]);
+      });
+
+      // Add suspicious withdrawals
+      securityAlerts.suspiciousWithdrawals.forEach((alert: any) => {
+        csvRows.push([
+          'Suspicious Withdrawal',
+          new Date().toISOString(),
+          alert.wallet_address || 'N/A',
+          alert.alert_reason || 'N/A',
+          JSON.stringify(alert.details)
+        ]);
+      });
+
+      // Add rate limited attempts
+      securityAlerts.rateLimitedAttempts.forEach((attempt: ErrorLog) => {
+        csvRows.push([
+          'Rate Limited',
+          new Date(attempt.created_at).toISOString(),
+          attempt.context?.playerWallet || 'N/A',
+          'Too many requests',
+          JSON.stringify(attempt.context)
+        ]);
+      });
+
+      const csvContent = csvRows.map(row =>
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      ).join('\n');
+
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', `warfog-security-alerts-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert(`✅ Exported ${csvRows.length - 1} security alerts to CSV`);
+    } catch (error: any) {
+      alert(`❌ Failed to export security alerts: ${error.message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Clear security alerts (clears relevant error logs)
+  const handleClearSecurityAlerts = async () => {
+    if (!confirm('⚠️ Are you sure you want to clear security alerts?\n\nThis will clear banned wallet attempts and rate-limited errors.\n\nThis action cannot be undone!')) {
+      return;
+    }
+
+    setActionLoading('clear-alerts');
+    try {
+      // Clear banned wallet attempts and rate limited errors from error_logs
+      const response = await fetch(`${backendUrl}/api/admin/${secretPath}/security-alerts/clear`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`✅ Cleared ${data.deletedCount} security alerts`);
+        setSecurityAlerts(null); // Update UI
+        fetchSecurityAlerts(); // Refresh alerts
+      } else {
+        alert(`❌ Failed to clear security alerts: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`❌ Failed to clear security alerts: ${error.message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-950 text-lime-500 font-mono p-6 flex items-center justify-center">
@@ -317,10 +416,28 @@ export const AdminStatusPage: React.FC<AdminStatusPageProps> = ({ onClose }) => 
       {/* Security Alerts Panel */}
       {securityAlerts && securityAlerts.totalAlerts > 0 && (
         <div className="bg-yellow-900/20 border-2 border-yellow-700 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-bold mb-4 text-yellow-500 flex items-center gap-2">
-            ⚠️ SECURITY ALERTS
-            <span className="text-lg text-gray-500">({securityAlerts.totalAlerts})</span>
-          </h2>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+            <h2 className="text-xl font-bold text-yellow-500 flex items-center gap-2">
+              ⚠️ SECURITY ALERTS
+              <span className="text-lg text-gray-500">({securityAlerts.totalAlerts})</span>
+            </h2>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => handleExportSecurityAlerts()}
+                disabled={actionLoading !== null}
+                className="flex-1 sm:flex-none px-4 py-2 bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-600 text-blue-400 font-bold rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {actionLoading === 'export-alerts' ? '⏳ EXPORTING...' : '📥 EXPORT CSV'}
+              </button>
+              <button
+                onClick={() => handleClearSecurityAlerts()}
+                disabled={actionLoading !== null}
+                className="flex-1 sm:flex-none px-4 py-2 bg-red-900/30 hover:bg-red-900/50 border-2 border-red-600 text-red-400 font-bold rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {actionLoading === 'clear-alerts' ? '⏳ CLEARING...' : '🗑️ CLEAR ALERTS'}
+              </button>
+            </div>
+          </div>
 
           {/* Suspicious Withdrawals */}
           {securityAlerts.suspiciousWithdrawals.length > 0 && (

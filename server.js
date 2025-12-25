@@ -2047,6 +2047,43 @@ app.get('/api/admin/:secretPath/security-alerts', async (req, res) => {
   }
 });
 
+// Clear security alerts (protected)
+app.delete('/api/admin/:secretPath/security-alerts/clear', async (req, res) => {
+  try {
+    const { secretPath } = req.params;
+
+    if (secretPath !== process.env.ADMIN_SECRET_PATH) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    // Delete banned wallet attempts and rate-limited errors
+    const { data, error } = await supabase
+      .from('error_logs')
+      .delete()
+      .or(`and(error_type.eq.withdrawal,error_message.eq.Banned wallet attempted withdrawal),error_message.ilike.%429%Too Many Requests%`)
+      .gte('created_at', oneHourAgo);
+
+    if (error) {
+      console.error('Error clearing security alerts:', error);
+      return res.status(500).json({ error: 'Failed to clear security alerts' });
+    }
+
+    console.log('🗑️ Admin cleared security alerts');
+
+    res.json({
+      success: true,
+      message: 'Security alerts cleared',
+      deletedCount: data?.length || 0
+    });
+
+  } catch (error) {
+    console.error('Error clearing security alerts:', error);
+    res.status(500).json({ error: 'Failed to clear security alerts' });
+  }
+});
+
 const PORT = process.env.PORT || 3003;
 
 app.listen(PORT, () => {
