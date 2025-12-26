@@ -776,74 +776,101 @@ app.post('/api/matchmaking/join', async (req, res) => {
       return res.status(400).json({ error: 'Missing playerId or wagerAmount' });
     }
 
-    // Validate player balance
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('game_balance')
-      .eq('id', playerId)
-      .single();
+    const wager = parseFloat(wagerAmount);
 
-    if (playerError || !player) {
-      return res.status(404).json({ error: 'Player not found' });
+    // ✅ NEW: Free matches (wagerAmount = 0) skip balance checks
+    if (wager > 0) {
+      // Wagered match - validate and deduct balance
+      const { data: player, error: playerError } = await supabase
+        .from('players')
+        .select('game_balance')
+        .eq('id', playerId)
+        .single();
+
+      if (playerError || !player) {
+        return res.status(404).json({ error: 'Player not found' });
+      }
+
+      if (player.game_balance < wager) {
+        return res.status(400).json({
+          error: `Insufficient balance. You have ${player.game_balance} SOL but need ${wager} SOL`
+        });
+      }
+
+      // Deduct balance atomically
+      const { error: balanceError } = await supabase
+        .from('players')
+        .update({ game_balance: player.game_balance - wager })
+        .eq('id', playerId);
+
+      if (balanceError) {
+        console.error('Error deducting balance:', balanceError);
+        throw balanceError;
+      }
+
+      // Add player to queue
+      const { error: queueError } = await supabase
+        .from('matchmaking_queue')
+        .insert({ player_id: playerId, wager_amount: wager });
+
+      if (queueError) {
+        // Rollback balance on queue error
+        await supabase
+          .from('players')
+          .update({ game_balance: player.game_balance })
+          .eq('id', playerId);
+        console.error('Error joining queue:', queueError);
+        throw queueError;
+      }
+    } else {
+      // ✅ NEW: Free match - just add to queue (no balance operations)
+      const { error: queueError } = await supabase
+        .from('matchmaking_queue')
+        .insert({ player_id: playerId, wager_amount: 0 });
+
+      if (queueError) {
+        console.error('Error joining free match queue:', queueError);
+        return res.status(500).json({ error: 'Failed to join queue' });
+      }
     }
 
-    if (player.game_balance < wagerAmount) {
-      return res.status(400).json({
-        error: `Insufficient balance. You have ${player.game_balance} SOL but need ${wagerAmount} SOL`
+    console.log(`🎮 Player ${playerId} joined queue for ${wager} SOL`);
+
+    // Log activity: joined lobby (only for wagered matches)
+    if (wager > 0) {
+      const { data: playerData } = await supabase
+        .from('players')
+        .select('wallet_address')
+        .eq('id', playerId)
+        .single();
+
+      if (playerData?.wallet_address) {
+        await supabase
+          .from('activity_logs')
+          .insert({
+            player_id: playerId,
+            wallet_address: playerData.wallet_address,
+            activity_type: 'joined_lobby',
+            details: { wager_amount: wager }
+          });
+      }
+    }
+
+    // ✅ CRITICAL FIX: Only auto-match for wagered games
+    // Free matches (wager = 0) stay in queue until explicit JOIN button click
+    if (wager === 0) {
+      console.log(`💚 Free match: Player ${playerId} waiting in queue for explicit JOIN`);
+      return res.json({
+        status: 'queued',
+        wagerAmount: 0
       });
     }
 
-    // Deduct balance atomically
-    const { error: balanceError } = await supabase
-      .from('players')
-      .update({ game_balance: player.game_balance - wagerAmount })
-      .eq('id', playerId);
-
-    if (balanceError) {
-      console.error('Error deducting balance:', balanceError);
-      throw balanceError;
-    }
-
-    // Add player to queue
-    const { error: queueError } = await supabase
-      .from('matchmaking_queue')
-      .insert({ player_id: playerId, wager_amount: wagerAmount });
-
-    if (queueError) {
-      // Rollback balance on queue error
-      await supabase
-        .from('players')
-        .update({ game_balance: player.game_balance })
-        .eq('id', playerId);
-      console.error('Error joining queue:', queueError);
-      throw queueError;
-    }
-
-    console.log(`🎮 Player ${playerId} joined queue for ${wagerAmount} SOL`);
-
-    // Log activity: joined lobby
-    const { data: playerData } = await supabase
-      .from('players')
-      .select('wallet_address')
-      .eq('id', playerId)
-      .single();
-
-    if (playerData?.wallet_address) {
-      await supabase
-        .from('activity_logs')
-        .insert({
-          player_id: playerId,
-          wallet_address: playerData.wallet_address,
-          activity_type: 'joined_lobby',
-          details: { wager_amount: wagerAmount }
-        });
-    }
-
-    // Attempt instant match using atomic database function
+    // Attempt instant match using atomic database function (wagered matches only)
     const { data: matchResult, error: matchError } = await supabase
       .rpc('find_and_create_match', {
         p_player_id: playerId,
-        p_wager_amount: wagerAmount
+        p_wager_amount: wager
       });
 
     if (matchError) {
@@ -860,34 +887,42 @@ app.post('/api/matchmaking/join', async (req, res) => {
       const match = matchResult[0];
       console.log(`✅ Instant match found! Match ID: ${match.match_id}`);
 
-      // Log activity: match started for both players
-      if (playerData?.wallet_address) {
-        const { data: opponentData } = await supabase
+      // Log activity: match started for both players (only for wagered matches)
+      if (wager > 0) {
+        const { data: playerData } = await supabase
           .from('players')
           .select('wallet_address')
-          .eq('id', match.opponent_id)
+          .eq('id', playerId)
           .single();
 
-        if (opponentData?.wallet_address) {
-          // Log for current player
-          await supabase
-            .from('activity_logs')
-            .insert({
-              player_id: playerId,
-              wallet_address: playerData.wallet_address,
-              activity_type: 'match_started',
-              details: { opponent_wallet: opponentData.wallet_address }
-            });
+        if (playerData?.wallet_address) {
+          const { data: opponentData } = await supabase
+            .from('players')
+            .select('wallet_address')
+            .eq('id', match.opponent_id)
+            .single();
 
-          // Log for opponent
-          await supabase
-            .from('activity_logs')
-            .insert({
-              player_id: match.opponent_id,
-              wallet_address: opponentData.wallet_address,
-              activity_type: 'match_started',
-              details: { opponent_wallet: playerData.wallet_address }
-            });
+          if (opponentData?.wallet_address) {
+            // Log for current player
+            await supabase
+              .from('activity_logs')
+              .insert({
+                player_id: playerId,
+                wallet_address: playerData.wallet_address,
+                activity_type: 'match_started',
+                details: { opponent_wallet: opponentData.wallet_address }
+              });
+
+            // Log for opponent
+            await supabase
+              .from('activity_logs')
+              .insert({
+                player_id: match.opponent_id,
+                wallet_address: opponentData.wallet_address,
+                activity_type: 'match_started',
+                details: { opponent_wallet: playerData.wallet_address }
+              });
+          }
         }
       }
 
@@ -901,7 +936,7 @@ app.post('/api/matchmaking/join', async (req, res) => {
       console.log(`⏳ No opponent found. Player ${playerId} waiting in queue...`);
       return res.json({
         status: 'queued',
-        wagerAmount: wagerAmount
+        wagerAmount: wager
       });
     }
 
@@ -913,7 +948,7 @@ app.post('/api/matchmaking/join', async (req, res) => {
   }
 });
 
-// Leave matchmaking queue
+// Leave/Cancel matchmaking queue (handles both free and wagered matches)
 app.post('/api/matchmaking/leave', async (req, res) => {
   try {
     const { playerId } = req.body;
@@ -927,6 +962,7 @@ app.post('/api/matchmaking/leave', async (req, res) => {
       .from('matchmaking_queue')
       .select('wager_amount')
       .eq('player_id', playerId)
+      .eq('status', 'waiting')
       .single();
 
     if (queueError || !queueEntry) {
@@ -937,39 +973,44 @@ app.post('/api/matchmaking/leave', async (req, res) => {
     const { error: deleteError } = await supabase
       .from('matchmaking_queue')
       .delete()
-      .eq('player_id', playerId);
+      .eq('player_id', playerId)
+      .eq('status', 'waiting');
 
     if (deleteError) {
       console.error('Error removing from queue:', deleteError);
       throw deleteError;
     }
 
-    // Refund balance
-    const { data: player, error: playerError } = await supabase
-      .from('players')
-      .select('game_balance')
-      .eq('id', playerId)
-      .single();
+    // Refund balance (only for wagered matches, wager_amount = 0 for free matches)
+    if (queueEntry.wager_amount > 0) {
+      const { data: player, error: playerError } = await supabase
+        .from('players')
+        .select('game_balance')
+        .eq('id', playerId)
+        .single();
 
-    if (playerError || !player) {
-      console.error('Warning: Player not found for refund:', playerError);
-      return res.json({
-        success: true,
-        refundedAmount: queueEntry.wager_amount,
-        warning: 'Removed from queue but could not refund balance'
-      });
+      if (playerError || !player) {
+        console.error('Warning: Player not found for refund:', playerError);
+        return res.json({
+          success: true,
+          refundedAmount: queueEntry.wager_amount,
+          warning: 'Removed from queue but could not refund balance'
+        });
+      }
+
+      const { error: refundError } = await supabase
+        .from('players')
+        .update({ game_balance: player.game_balance + queueEntry.wager_amount })
+        .eq('id', playerId);
+
+      if (refundError) {
+        console.error('Error refunding balance:', refundError);
+      }
+
+      console.log(`❌ Player ${playerId} left queue. Refunded ${queueEntry.wager_amount} SOL`);
+    } else {
+      console.log(`❌ Player ${playerId} left free match queue`);
     }
-
-    const { error: refundError } = await supabase
-      .from('players')
-      .update({ game_balance: player.game_balance + queueEntry.wager_amount })
-      .eq('id', playerId);
-
-    if (refundError) {
-      console.error('Error refunding balance:', refundError);
-    }
-
-    console.log(`❌ Player ${playerId} left queue. Refunded ${queueEntry.wager_amount} SOL`);
 
     res.json({
       success: true,
@@ -980,6 +1021,106 @@ app.post('/api/matchmaking/leave', async (req, res) => {
     console.error('❌ Leave queue error:', error);
     res.status(500).json({
       error: error.message || 'Failed to leave queue'
+    });
+  }
+});
+
+// Alias for cancel (same as leave)
+app.post('/api/matchmaking/cancel', async (req, res) => {
+  // Forward to leave endpoint
+  req.url = '/api/matchmaking/leave';
+  return app._router.handle(req, res, () => {});
+});
+
+// ==============================================
+// JOIN SPECIFIC PLAYER (Free Match Explicit Join)
+// ==============================================
+// When clicking JOIN button on a specific queued player
+app.post('/api/matchmaking/join-specific', async (req, res) => {
+  try {
+    const { playerId, targetPlayerId } = req.body;
+
+    if (!playerId || !targetPlayerId) {
+      return res.status(400).json({ error: 'Missing playerId or targetPlayerId' });
+    }
+
+    console.log(`🎯 Player ${playerId} attempting to join player ${targetPlayerId}'s queue`);
+
+    // Verify target player is in queue for free match
+    const { data: targetQueue, error: targetError } = await supabase
+      .from('matchmaking_queue')
+      .select('wager_amount')
+      .eq('player_id', targetPlayerId)
+      .single();
+
+    if (targetError || !targetQueue) {
+      console.error('Target player not in queue:', targetError);
+      return res.status(404).json({ error: 'Target player not in queue' });
+    }
+
+    if (targetQueue.wager_amount !== 0) {
+      return res.status(400).json({ error: 'Can only join free matches this way' });
+    }
+
+    // Create match directly between the two players
+    const { data: newMatch, error: matchError } = await supabase
+      .from('matches')
+      .insert({
+        player1_id: targetPlayerId,  // Target player who was waiting
+        player2_id: playerId,         // Player who clicked JOIN
+        status: 'active',
+        wager_amount: 0,
+        started_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (matchError || !newMatch) {
+      console.error('Error creating match:', matchError);
+      return res.status(500).json({ error: 'Failed to create match' });
+    }
+
+    console.log(`✅ Match created! Match ID: ${newMatch.id} between ${targetPlayerId} and ${playerId}`);
+
+    // Initialize game state for the new match
+    const { error: gameStateError } = await supabase
+      .from('game_states')
+      .insert({
+        match_id: newMatch.id,
+        current_turn: 1,
+        turn_phase: 'planning',
+        turn_deadline: new Date(Date.now() + 10000).toISOString(),  // 10 seconds from now
+        player1_silos: [2, 2, 2, 2, 2],  // Array of HP values (each silo starts with 2 HP)
+        player2_silos: [2, 2, 2, 2, 2],  // Array of HP values (each silo starts with 2 HP)
+        player1_last_active: new Date().toISOString(),
+        player2_last_active: new Date().toISOString()
+      });
+
+    if (gameStateError) {
+      console.error('Error creating game state:', gameStateError);
+      // Don't fail - match is already created, game state can be created later
+    }
+
+    // Remove both players from queue
+    const { error: removeError } = await supabase
+      .from('matchmaking_queue')
+      .delete()
+      .in('player_id', [playerId, targetPlayerId]);
+
+    if (removeError) {
+      console.error('Error removing players from queue:', removeError);
+      // Don't fail - match is already created
+    }
+
+    return res.json({
+      status: 'matched',
+      matchId: newMatch.id
+    });
+
+  } catch (error) {
+    console.error('❌ Join specific player error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to join match'
     });
   }
 });

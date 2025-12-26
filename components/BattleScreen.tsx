@@ -16,7 +16,8 @@ const createBases = (): Base[] => [
 const updateGameResults = async (
   winnerId: string,
   loserId: string,
-  betAmount: number
+  betAmount: number,
+  matchId?: string | null
 ) => {
   try {
     // Skip if IDs are invalid (guest players)
@@ -83,6 +84,19 @@ const updateGameResults = async (
     }
 
     console.log(`Game results updated: Winner ${winnerId} (+${winnerGain} SOL), Loser ${loserId} (-${loserLoss} SOL)`);
+
+    // Update match record if matchId is provided (for online matches)
+    if (matchId) {
+      await supabase
+        .from('matches')
+        .update({
+          status: 'completed',
+          winner_id: winnerId,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', matchId);
+      console.log(`Match ${matchId} marked as completed with winner ${winnerId}`);
+    }
   } catch (error) {
     console.error('Error updating game results:', error);
   }
@@ -1214,7 +1228,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                       setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
 
                       // Update database with win/loss, ratings, and balance changes (for all real player matches)
-                      updateGameResults(current.player1.id, current.player2.id, current.betAmount);
+                      updateGameResults(current.player1.id, current.player2.id, current.betAmount, matchId);
                    } else if (pDestroyed >= 3 && eDestroyed < 3) {
                       // Player 2 wins
                       winner = current.player2.id;
@@ -1233,7 +1247,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                       setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
 
                       // Update database with win/loss, ratings, and balance changes (for all real player matches)
-                      updateGameResults(current.player2.id, current.player1.id, current.betAmount);
+                      updateGameResults(current.player2.id, current.player1.id, current.betAmount, matchId);
                    } else {
                       // Tie
                       winner = 'TIE';
@@ -1448,7 +1462,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
              {isResignation && isWin && (
                <div className="text-xl text-yellow-400 mb-4 font-bold tracking-wider animate-pulse">
-                 ENEMY COMMANDER FLED THE BATTLEFIELD
+                 ENEMY FLED THE BATTLEFIELD
                </div>
              )}
 

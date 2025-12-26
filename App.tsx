@@ -317,7 +317,7 @@ export default function App() {
     <div className="h-screen bg-terminal-bg text-terminal-green font-mono relative flex flex-col overflow-hidden">
       {/* Background Grid Effect */}
       <div
-        className="absolute inset-0 opacity-5 pointer-events-none grid-scroll-overlay"
+        className="absolute inset-0 opacity-10 pointer-events-none grid-scroll-overlay"
         style={{
           backgroundImage: 'linear-gradient(#a3e635 1px, transparent 1px), linear-gradient(90deg, #a3e635 1px, transparent 1px)',
           backgroundSize: '40px 40px'

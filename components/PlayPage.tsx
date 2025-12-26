@@ -35,6 +35,11 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
   // players simulation
   const [fPlayers, setFPlayers] = useState<number>(0);
 
+  // ✅ NEW: Queue state for free match matchmaking
+  const [queueStatus, setQueueStatus] = useState<'idle' | 'searching' | 'matched'>('idle');
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [queuedPlayers, setQueuedPlayers] = useState<any[]>([]);
+
   // Update local state when player prop changes (e.g., wallet disconnect creates new guest)
   useEffect(() => {
     // If player ID changed (new guest after wallet disconnect), update immediately
@@ -56,6 +61,78 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
 
     return () => clearInterval(interval);
   }, []);
+
+  // ✅ NEW: Fetch queued players for activity feed
+  useEffect(() => {
+    const fetchQueue = async () => {
+      const { data } = await supabase
+        .from('active_matchmaking_queue')
+        .select('*');
+
+      setQueuedPlayers(data || []);
+    };
+
+    fetchQueue();
+
+    // Realtime subscription for queue changes
+    const subscription = supabase
+      .channel('queue_changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'matchmaking_queue'
+      }, fetchQueue)
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // ✅ NEW: Poll for match when queued
+  useEffect(() => {
+    if (queueStatus !== 'searching') return;
+
+    // Record when we started searching to avoid detecting old matches
+    const searchStartTime = new Date().toISOString();
+
+    const interval = setInterval(async () => {
+      try {
+        const { data: matches } = await supabase
+          .from('matches')
+          .select('id, created_at')
+          .or(`player1_id.eq.${player.id},player2_id.eq.${player.id}`)
+          .eq('status', 'active')
+          .gte('created_at', searchStartTime)  // Only matches created after we started searching
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (matches && matches.length > 0) {
+          const foundMatchId = matches[0].id;
+          setMatchId(foundMatchId);
+          setQueueStatus('matched');
+          onStartBattle(foundMatchId);
+        }
+      } catch (error) {
+        // No match yet, keep polling
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [queueStatus, player.id, onStartBattle]);
+
+  // ✅ NEW: Cleanup - Cancel queue on unmount
+  useEffect(() => {
+    return () => {
+      if (queueStatus === 'searching') {
+        fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerId: player.id })
+        }).catch(console.error);
+      }
+    };
+  }, [queueStatus, player.id]);
 
   const handleSaveProfile = async () => {
     if (!editUsername.trim()) {
@@ -109,11 +186,84 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
     }
   };
 
-  const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    return `${Math.floor(seconds / 3600)}h ago`;
+  // ✅ NEW: Join matchmaking queue (free matches)
+  const handleJoinQueue = async () => {
+    if (!player.id || isInBattle || queueStatus !== 'idle') return;
+
+    setQueueStatus('searching');
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: player.id,
+          wagerAmount: 0  // Free match
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'matched') {
+        setMatchId(data.matchId);
+        setQueueStatus('matched');
+        onStartBattle(data.matchId);
+      }
+    } catch (error) {
+      console.error('Failed to join queue:', error);
+      setQueueStatus('idle');
+    }
+  };
+
+  // ✅ NEW: Cancel queue
+  const handleCancelQueue = async () => {
+    try {
+      await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: player.id })
+      });
+      setQueueStatus('idle');
+    } catch (error) {
+      console.error('Failed to cancel queue:', error);
+    }
+  };
+
+  // ✅ NEW: Bot match handler (moved from PLAY button)
+  const handlePlayBot = () => {
+    onStartBattle(undefined);  // No matchId = bot match
+  };
+
+  // ✅ NEW: Join existing queued player's match
+  const handleJoinMatch = async (opponentId: string) => {
+    if (!player.id || queueStatus !== 'idle') return;
+
+    setQueueStatus('searching');
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/join-specific`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: player.id,
+          targetPlayerId: opponentId
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'matched') {
+        setMatchId(data.matchId);
+        setQueueStatus('matched');
+        onStartBattle(data.matchId);
+      } else {
+        // If match failed, return to idle
+        setQueueStatus('idle');
+      }
+    } catch (error) {
+      console.error('Failed to join match:', error);
+      setQueueStatus('idle');
+    }
   };
 
   return (
@@ -138,11 +288,82 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
         </div>
 
         {/* WARFOG.IO Logo - Centered and Prominent */}
-        <div className="text-center mb-8 mt-12">
+        <div className="text-center mb-12 mt-12">
           <h1 className="text-5xl font-black text-lime-500 tracking-wider animate-pulse">WARFOG.IO</h1>
         </div>
 
-{/* How to Play Section */}
+        {/* Player */}
+        <div className="mb-10 max-w-md mx-auto px-3 space-y-4">
+          {/* Inline Flag and Username */}
+          <div className="flex gap-3 items-center justify-center">
+            {/* Flag Selector */}
+            <div className="relative">
+              <label className="block text-xs text-gray-400 mb-2 ">Country</label>
+              <div className="relative">
+                <select
+                  value={editCountry}
+                  onChange={(e) => {
+                    setEditCountry(e.target.value);
+                    handleSaveProfile();
+                  }}
+                  className="bg-gray-900 border border-lime-900 text-lime-500 px-4 py-3 h-12 font-mono focus:outline-none focus:border-lime-500 appearance-none cursor-pointer pr-16 rounded"
+                >
+                  {COUNTRY_CODES.map((code) => (
+                    <option key={code} value={code} className="bg-gray-900">
+                      {code.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <FlagIcon countryCode={editCountry} width="32px" height="24px" />
+                </div>
+              </div>
+            </div>
+
+            {/* Username Input */}
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-2">Nickname</label>
+              <input
+                type="text"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                onBlur={handleSaveProfile}
+                maxLength={20}
+                autoFocus={player.isGuest && !editUsername}
+                className="w-full bg-gray-900 border text-sm border-lime-900 text-lime-500 px-4 py-3 h-12 font-mono focus:outline-none focus:border-lime-500 rounded placeholder:text-gray-600 placeholder:italic"
+                placeholder="Enter your nickname"
+              />
+            </div>
+          </div>
+
+          {/* Play Button - Queue System */}
+          {queueStatus === 'idle' ? (
+            <button
+              onClick={handleJoinQueue}
+              disabled={isInBattle || isSaving}
+              className="w-full py-4 bg-lime-900/40 border-2 rounded border-lime-400 text-lime-400 font-black text-2xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40 animate-pulse"
+            >
+              PLAY
+            </button>
+          ) : queueStatus === 'searching' ? (
+            <div className="space-y-3">
+              <div className="w-full py-4 bg-yellow-900/40 border-2 rounded border-yellow-400 text-yellow-400 font-black text-xl text-center">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="material-icons-outlined animate-spin">refresh</span>
+                  <span>SEARCHING FOR OPPONENT...</span>
+                </div>
+              </div>
+              <button
+                onClick={handleCancelQueue}
+                className="w-full py-2 bg-red-900/40 border border-red-400 text-red-400 font-bold text-sm hover:bg-red-900/60 transition-all rounded"
+              >
+                CANCEL
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+      {/* How to Play Section */}
         <div className="bg-black/60 mb-6 mr-4">
           <button
             onClick={() => setIsHowToPlayOpen(!isHowToPlayOpen)}
@@ -223,62 +444,28 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                   </p>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
 
-        {/* Player */}
-        <div className="mb-10 max-w-md mx-auto mr-3 ml-3 space-y-4">
-          {/* Inline Flag and Username */}
-          <div className="flex gap-3 items-center justify-center">
-            {/* Flag Selector */}
-            <div className="relative">
-              <label className="block text-xs text-gray-400 mb-2 ">Country</label>
-              <div className="relative">
-                <select
-                  value={editCountry}
-                  onChange={(e) => {
-                    setEditCountry(e.target.value);
-                    handleSaveProfile();
-                  }}
-                  className="bg-gray-900 border border-lime-900 text-lime-500 px-4 py-3 h-12 font-mono focus:outline-none focus:border-lime-500 appearance-none cursor-pointer pr-16 rounded"
-                >
-                  {COUNTRY_CODES.map((code) => (
-                    <option key={code} value={code} className="bg-gray-900">
-                      {code.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <FlagIcon countryCode={editCountry} width="32px" height="24px" />
+              {/* ✅ NEW: Step 5 - Play Against Bot */}
+              <div className="flex gap-3 mt-6 pt-4 border-t border-lime-900/30">
+                <div className="flex-shrink-0 w-8 h-8 bg-blue-900/40 border border-blue-500 flex items-center justify-center">
+                  <span className="material-icons-outlined text-blue-400 text-sm">smart_toy</span>
+                </div>
+                <div className="flex-1">
+                  <div className="text-blue-400 font-bold text-sm mb-1">PRACTICE AGAINST BOT</div>
+                  <p className="text-xs text-gray-400 leading-relaxed mb-3">
+                    Practice the game mechanics against a bot opponent before facing real players.
+                  </p>
+                  <button
+                    onClick={handlePlayBot}
+                    disabled={isInBattle || queueStatus !== 'idle'}
+                    className="w-full py-2 bg-blue-900/40 border border-blue-400 text-blue-400 font-bold text-sm hover:bg-blue-900/60 transition-all rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    PLAY AGAINST BOT
+                  </button>
                 </div>
               </div>
             </div>
-
-            {/* Username Input */}
-            <div className="flex-1">
-              <label className="block text-xs text-gray-400 mb-2">Nickname</label>
-              <input
-                type="text"
-                value={editUsername}
-                onChange={(e) => setEditUsername(e.target.value)}
-                onBlur={handleSaveProfile}
-                maxLength={20}
-                autoFocus={player.isGuest && !editUsername}
-                className="w-full bg-gray-900 border text-sm border-lime-900 text-lime-500 px-4 py-3 h-12 font-mono focus:outline-none focus:border-lime-500 rounded placeholder:text-gray-600 placeholder:italic"
-                placeholder="Enter your nickname"
-              />
-            </div>
-          </div>
-
-          {/* Play Button */}
-          <button
-            onClick={() => onStartBattle()}
-            disabled={isInBattle || isSaving}
-            className="w-full py-4 bg-lime-900/40 border-2 rounded border-lime-400 text-lime-400 font-black text-2xl hover:bg-lime-900/60 transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:shadow-[0_0_50px_rgba(163,230,53,0.5)] tracking-widest disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-lime-900/40 animate-pulse"
-          >
-            PLAY
-          </button>
+          )}
         </div>
 
         {/* Activity Feed - Free Matches Only */}
@@ -293,29 +480,59 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
             </div>
           </div>
           <div className="p-2 space-y-2">
-            {activities.length > 0 ? (
-              (() => {
-                // Deduplicate "started battle" activities
-                const deduplicatedActivities: typeof activities = [];
-                const seenBattles = new Set<string>();
+            {/* ✅ NEW: Show queued players with JOIN button */}
+            {queuedPlayers.length > 0 && queuedPlayers
+              .filter(q => q.player_id !== player.id)  // Don't show self
+              .map((entry) => {
+                const timeAgo = Math.floor((Date.now() - new Date(entry.created_at).getTime()) / 1000);
+                const timeDisplay = timeAgo < 5 ? 'now...' : `${timeAgo}s ago`;
 
-                activities.forEach((activity) => {
-                  if (activity.message.includes('started battle')) {
-                    const match = activity.message.match(/(.+?) started battle vs (.+)/);
-                    if (match) {
-                      const [_, wallet1, wallet2] = match;
-                      const battleKey = [wallet1, wallet2].sort().join('-');
-                      if (!seenBattles.has(battleKey)) {
-                        seenBattles.add(battleKey);
-                        deduplicatedActivities.push(activity);
+                return (
+                  <div
+                    key={entry.queue_id}
+                    className="flex items-center gap-2 py-3 px-3 bg-yellow-900/20 border border-yellow-500/30 hover:bg-yellow-900/30 transition-all text-xs font-bold rounded"
+                  >
+                    {entry.country_code && <FlagIcon countryCode={entry.country_code} width="16px" height="12px" />}
+                    <span className="text-white">{entry.username}</span>
+                    <span className="text-yellow-400">looking for opponent</span>
+                    <span className="text-yellow-500 ml-auto">⚡{entry.rating}</span>
+                    <span className="text-gray-500 text-xs">{timeDisplay}</span>
+                    <button
+                      onClick={() => handleJoinMatch(entry.player_id)}
+                      disabled={queueStatus !== 'idle'}
+                      className="ml-2 px-3 py-1 bg-lime-500 text-black font-bold rounded hover:bg-lime-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      JOIN
+                    </button>
+                  </div>
+                );
+              })}
+
+            {/* Recent Activities */}
+            {activities.length > 0 && (
+              <div className={queuedPlayers.filter(q => q.player_id !== player.id).length > 0 ? "pt-4 border-t border-gray-700/20" : ""}>
+                {(() => {
+                  // Deduplicate "started battle" activities
+                  const deduplicatedActivities: typeof activities = [];
+                  const seenBattles = new Set<string>();
+
+                  activities.forEach((activity) => {
+                    if (activity.message.includes('started battle')) {
+                      const match = activity.message.match(/(.+?) started battle vs (.+)/);
+                      if (match) {
+                        const [_, wallet1, wallet2] = match;
+                        const battleKey = [wallet1, wallet2].sort().join('-');
+                        if (!seenBattles.has(battleKey)) {
+                          seenBattles.add(battleKey);
+                          deduplicatedActivities.push(activity);
+                        }
                       }
+                    } else {
+                      deduplicatedActivities.push(activity);
                     }
-                  } else {
-                    deduplicatedActivities.push(activity);
-                  }
-                });
+                  });
 
-                return deduplicatedActivities.slice(0, 7).map((activity) => {
+                  return deduplicatedActivities.slice(0, 7).map((activity) => {
                   const timeAgo = Math.floor((Date.now() - activity.timestamp) / 1000);
                   let timeDisplay = '';
                   if (timeAgo < 5) {
@@ -338,12 +555,12 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                     const lobbyMatch = activity.message.match(/(.+?) joined ([\d.]+) lobby/);
                     if (lobbyMatch) {
                       const username = lobbyMatch[1];
-                      emoji = '🎮';
+                      emoji = '☢️';
                       content = (
                         <>
                           {activity.countryCode && <FlagIcon countryCode={activity.countryCode} width="16px" height="12px" />}
                           <span className="text-white"> {username}</span>
-                          <span className="text-blue-400"> joined free lobby</span>
+                          <span className="text-blue-400"> joined lobby</span>
                         </>
                       );
                     }
@@ -388,10 +605,14 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                       <span className="text-md">{emoji}</span>
                     </div>
                   );
-                });
-              })()
-            ) : (
-              <div className="text-center py-8 text-gray-600 text-sm">No activity yet</div>
+                  });
+                })()}
+              </div>
+            )}
+
+            {/* No players or activity */}
+            {queuedPlayers.filter(q => q.player_id !== player.id).length === 0 && activities.length === 0 && (
+              <div className="text-center py-8 text-gray-600 text-sm">No players in queue</div>
             )}
           </div>
         </div>

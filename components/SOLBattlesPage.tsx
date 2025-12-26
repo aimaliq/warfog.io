@@ -267,7 +267,7 @@ export const SOLBattlesPage: React.FC<SOLBattlesPageProps> = ({
       <div className="w-full max-w-2xl">
 
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-12 flex items-center justify-between">
           <h1 className="lg:hidden text-3xl font-black text-lime-500">SOL BATTLES</h1>
           <WalletButton className="wallet-custom lg:ml-auto" />
         </div>

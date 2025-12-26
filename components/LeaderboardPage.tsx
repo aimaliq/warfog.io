@@ -120,7 +120,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                       </div>
                     </div>
                     <div className="col-span-5 sm:col-span-4 flex items-center justify-center">
-                      <div className="inline-block bg-black/50 px-2 sm:px-3 py-1">
+                      <div className="inline-block px-2 sm:px-3 py-1">
                         <span className="text-yellow-400 font-bold font-mono text-[18px] sm:text-base tracking-wider">
                           {entry.rating}
                         </span>

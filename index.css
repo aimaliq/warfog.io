@@ -478,19 +478,5 @@ button.wallet-adapter-button[aria-expanded] {
 }
 
 .grid-scroll-overlay {
-  animation: grid-scroll 5s linear infinite;
-}
-
-/* Fast horizontal dashes effect - "surfing through space" */
-@keyframes dash-scroll {
-  0% {
-    background-position: 100px 0;
-  }
-  100% {
-    background-position: 0 0;
-  }
-}
-
-.dash-scroll-effect {
-  animation: dash-scroll 0.6s linear infinite;
+  animation: grid-scroll 4s linear infinite;
 }
