@@ -60,7 +60,7 @@ const updateGameResults = async (
 
     // Update winner balance, stats, and rating
     if (winnerData) {
-      await supabase
+      const { error: winnerError } = await supabase
         .from('players')
         .update({
           total_wins: (winnerData.total_wins || 0) + 1,
@@ -69,11 +69,15 @@ const updateGameResults = async (
           rating: winnerNewRating
         })
         .eq('id', winnerId);
+
+      if (winnerError) {
+        console.error('Failed to update winner:', winnerError);
+      }
     }
 
     // Update loser balance, stats, and rating
     if (loserData) {
-      await supabase
+      const { error: loserError } = await supabase
         .from('players')
         .update({
           total_losses: (loserData.total_losses || 0) + 1,
@@ -81,6 +85,10 @@ const updateGameResults = async (
           rating: loserNewRating
         })
         .eq('id', loserId);
+
+      if (loserError) {
+        console.error('Failed to update loser:', loserError);
+      }
     }
 
     console.log(`Game results updated: Winner ${winnerId} (+${winnerGain} SOL), Loser ${loserId} (-${loserLoss} SOL)`);
@@ -95,7 +103,6 @@ const updateGameResults = async (
           completed_at: new Date().toISOString()
         })
         .eq('id', matchId);
-      console.log(`Match ${matchId} marked as completed with winner ${winnerId}`);
     }
   } catch (error) {
     console.error('Error updating game results:', error);
@@ -390,24 +397,36 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
             };
           });
 
-          // Trigger settlement for wagered match
-          if (data.match.wager_amount && data.match.wager_amount > 0 && data.resignation.winnerId) {
-            console.log(`💰 Settling wagered match after resignation: ${matchId}`);
-            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                matchId: matchId,
-                winnerId: data.resignation.winnerId
+          // Update game results for resignation
+          if (data.resignation.winnerId && data.resignation.resignedPlayerId) {
+            // For wagered matches, call settlement endpoint
+            if (data.match.wager_amount && data.match.wager_amount > 0) {
+              console.log(`💰 Settling wagered match after resignation: ${matchId}`);
+              fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  matchId: matchId,
+                  winnerId: data.resignation.winnerId
+                })
               })
-            })
-            .then(res => res.json())
-            .then(data => {
-              console.log('✅ Match settlement complete:', data);
-            })
-            .catch(err => {
-              console.error('❌ Match settlement error:', err);
-            });
+              .then(res => res.json())
+              .then(data => {
+                console.log('✅ Match settlement complete:', data);
+              })
+              .catch(err => {
+                console.error('❌ Match settlement error:', err);
+              });
+            } else {
+              // For free matches, update game results directly
+              console.log(`🆓 Updating free match results after resignation: ${matchId}`);
+              updateGameResults(
+                data.resignation.winnerId,
+                data.resignation.resignedPlayerId,
+                data.match.wager_amount || 0,
+                matchId
+              );
+            }
           }
         }
       } catch (error) {
@@ -459,24 +478,36 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
             };
           });
 
-          // Trigger settlement for wagered match
-          if (match.wager_amount && match.wager_amount > 0 && resignation.winnerId) {
-            console.log(`💰 Settling wagered match after resignation: ${matchId}`);
-            fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                matchId: matchId,
-                winnerId: resignation.winnerId
+          // Update game results for resignation
+          if (resignation.winnerId && resignation.resignedPlayerId) {
+            // For wagered matches, call settlement endpoint
+            if (match.wager_amount && match.wager_amount > 0) {
+              console.log(`💰 Settling wagered match after resignation: ${matchId}`);
+              fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  matchId: matchId,
+                  winnerId: resignation.winnerId
+                })
               })
-            })
-            .then(res => res.json())
-            .then(data => {
-              console.log('✅ Match settlement complete:', data);
-            })
-            .catch(err => {
-              console.error('❌ Match settlement error:', err);
-            });
+              .then(res => res.json())
+              .then(data => {
+                console.log('✅ Match settlement complete:', data);
+              })
+              .catch(err => {
+                console.error('❌ Match settlement error:', err);
+              });
+            } else {
+              // For free matches, update game results directly
+              console.log(`🆓 Updating free match results after resignation: ${matchId}`);
+              updateGameResults(
+                resignation.winnerId,
+                resignation.resignedPlayerId,
+                match.wager_amount || 0,
+                matchId
+              );
+            }
           }
 
           return;
@@ -634,24 +665,32 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
             // Game over
             console.log('🏁 Game over! Winner:', match.winner_id);
 
-            // Call settlement endpoint if this is a wagered match
-            if (match.wager_amount && match.wager_amount > 0 && match.winner_id) {
-              console.log(`💰 Settling wagered match: ${matchId}`);
-              fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  matchId: matchId,
-                  winnerId: match.winner_id
+            // Update game results based on match type
+            if (match.winner_id) {
+              if (match.wager_amount && match.wager_amount > 0) {
+                // Wagered match - call settlement endpoint
+                console.log(`💰 Settling wagered match: ${matchId}`);
+                fetch(`${import.meta.env.VITE_BACKEND_URL}/api/match/settle`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    matchId: matchId,
+                    winnerId: match.winner_id
+                  })
                 })
-              })
-              .then(res => res.json())
-              .then(data => {
-                console.log('✅ Match settlement complete:', data);
-              })
-              .catch(err => {
-                console.error('❌ Match settlement error:', err);
-              });
+                .then(res => res.json())
+                .then(data => {
+                  console.log('✅ Match settlement complete:', data);
+                })
+                .catch(err => {
+                  console.error('❌ Match settlement error:', err);
+                });
+              } else {
+                // Free match - update game results directly
+                console.log(`🆓 Updating free match results: ${matchId}`);
+                const loserId = match.player1_id === match.winner_id ? match.player2_id : match.player1_id;
+                updateGameResults(match.winner_id, loserId, 0, matchId);
+              }
             }
 
             setGameState(current => {
@@ -1226,9 +1265,6 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                       const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, true);
                       const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, false);
                       setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
-
-                      // Update database with win/loss, ratings, and balance changes (for all real player matches)
-                      updateGameResults(current.player1.id, current.player2.id, current.betAmount, matchId);
                    } else if (pDestroyed >= 3 && eDestroyed < 3) {
                       // Player 2 wins
                       winner = current.player2.id;
@@ -1245,9 +1281,6 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                       const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, false);
                       const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, true);
                       setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
-
-                      // Update database with win/loss, ratings, and balance changes (for all real player matches)
-                      updateGameResults(current.player2.id, current.player1.id, current.betAmount, matchId);
                    } else {
                       // Tie
                       winner = 'TIE';
@@ -1257,8 +1290,6 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
                       // No rating changes for ties
                       setRatingChanges(null);
-
-                      // No balance updates for ties
                    }
               }
 

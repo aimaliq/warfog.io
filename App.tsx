@@ -267,7 +267,30 @@ export default function App() {
           player={gameState.player1}
           onStartBattle={(matchId?: string) => {
             setCurrentMatchId(matchId || null);
-            setGameState({ ...gameState, phase: GamePhase.MATCHMAKING });
+            // Reset game state for new battle
+            setGameState({
+              ...INITIAL_GAME_STATE,
+              player1: {
+                ...gameState.player1,
+                bases: createBases(),
+                basesDestroyed: 0,
+                totalHP: 10,
+                defendedBases: [],
+                attackedBases: [],
+                pendingHP: 0,
+              },
+              player2: {
+                ...gameState.player2,
+                bases: createBases(),
+                basesDestroyed: 0,
+                totalHP: 10,
+                defendedBases: [],
+                attackedBases: [],
+                pendingHP: 0,
+              },
+              phase: GamePhase.MATCHMAKING,
+              betAmount: 0,
+            });
           }}
           onPlayerUpdate={handlePlayerUpdate}
           isInBattle={gameState.phase !== GamePhase.LOBBY}
@@ -281,7 +304,30 @@ export default function App() {
           player={gameState.player1}
           onStartBattle={(matchId?: string) => {
             setCurrentMatchId(matchId || null);
-            setGameState({ ...gameState, phase: GamePhase.MATCHMAKING });
+            // Reset game state for new battle
+            setGameState({
+              ...INITIAL_GAME_STATE,
+              player1: {
+                ...gameState.player1,
+                bases: createBases(),
+                basesDestroyed: 0,
+                totalHP: 10,
+                defendedBases: [],
+                attackedBases: [],
+                pendingHP: 0,
+              },
+              player2: {
+                ...gameState.player2,
+                bases: createBases(),
+                basesDestroyed: 0,
+                totalHP: 10,
+                defendedBases: [],
+                attackedBases: [],
+                pendingHP: 0,
+              },
+              phase: GamePhase.MATCHMAKING,
+              betAmount: 0,
+            });
           }}
           isInBattle={gameState.phase !== GamePhase.LOBBY}
         />
