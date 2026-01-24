@@ -43,51 +43,35 @@ const updateGameResults = async (
       .eq('id', loserId)
       .single();
 
-    // Calculate Elo rating changes (applies to ALL matches - free and wagered)
-    let winnerNewRating = winnerData?.rating || 500;
-    let loserNewRating = loserData?.rating || 500;
+    // NOTE: Rating and stats updates are handled server-side via increment_player_stats RPC in server.js
+    // to prevent double updates. We only handle balance updates here for wagered matches.
 
-    if (winnerData && loserData) {
-      const winnerRatingChange = calculateEloChange(winnerData.rating || 500, loserData.rating || 500, true);
-      const loserRatingChange = calculateEloChange(loserData.rating || 500, winnerData.rating || 500, false);
-
-      // Apply rating changes with 100 floor
-      winnerNewRating = applyRatingChange(winnerData.rating || 500, winnerRatingChange);
-      loserNewRating = applyRatingChange(loserData.rating || 500, loserRatingChange);
-
-      console.log(`Rating changes: Winner ${winnerRatingChange > 0 ? '+' : ''}${winnerRatingChange} (${winnerData.rating} → ${winnerNewRating}), Loser ${loserRatingChange > 0 ? '+' : ''}${loserRatingChange} (${loserData.rating} → ${loserNewRating})`);
-    }
-
-    // Update winner balance, stats, and rating
-    if (winnerData) {
+    // Update winner balance and SOL won (balance and SOL tracking only - stats/rating handled server-side)
+    if (winnerData && winnerGain > 0) {
       const { error: winnerError } = await supabase
         .from('players')
         .update({
-          total_wins: (winnerData.total_wins || 0) + 1,
           game_balance: (winnerData.game_balance || 0) + winnerGain,
           total_sol_won: (winnerData.total_sol_won || 0) + winnerGain,
-          rating: winnerNewRating
         })
         .eq('id', winnerId);
 
       if (winnerError) {
-        console.error('Failed to update winner:', winnerError);
+        console.error('Failed to update winner balance:', winnerError);
       }
     }
 
-    // Update loser balance, stats, and rating
-    if (loserData) {
+    // Update loser balance (balance tracking only - stats/rating handled server-side)
+    if (loserData && loserLoss > 0) {
       const { error: loserError } = await supabase
         .from('players')
         .update({
-          total_losses: (loserData.total_losses || 0) + 1,
           game_balance: Math.max(0, (loserData.game_balance || 0) - loserLoss), // Don't go negative
-          rating: loserNewRating
         })
         .eq('id', loserId);
 
       if (loserError) {
-        console.error('Failed to update loser:', loserError);
+        console.error('Failed to update loser balance:', loserError);
       }
     }
 
@@ -329,6 +313,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
               : 0,
             currentStreak: opponentData.current_streak || 0,
             longestStreak: opponentData.best_streak || 0,
+            rating: opponentData.rating || 500,
           },
           betAmount: match.wager_amount || 0
         }));
@@ -1467,7 +1452,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
               <FlagIcon countryCode={player.countryFlag} width="48px" height="32px" />
               <div>
                 <div className="text-lime-500 font-bold text-sm tracking-wider">{player.username}</div>
-                <div className="text-[10px] text-yellow-400 font-bold font-mono">⚡ {player.rating || 500}</div>
+                <div className="text-[12px] text-yellow-400 font-bold font-mono">⚡ {player.rating || 500}</div>
               </div>
             </div>
           </div>
@@ -1768,7 +1753,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
               <div className="text-red-500 font-bold tracking-wider text-sm md:text-base">
                 {enemy.username}
               </div>
-              <div className="text-[10px] text-yellow-400 font-bold font-mono">
+              <div className="text-[12px] text-yellow-400 font-bold font-mono">
                 ⚡ {enemy.rating || 500}
               </div>
             </div>
@@ -1954,7 +1939,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
             <FlagIcon countryCode={player.countryFlag} width="48px" height="32px" />
             <div>
               <div className="text-lime-500 font-bold text-sm tracking-wider">{player.username}</div>
-              <div className="text-[10px] text-yellow-400 font-bold font-mono">⚡ {player.rating || 500}</div>
+              <div className="text-[12px] text-yellow-400 font-bold font-mono">⚡ {player.rating || 500}</div>
             </div>
           </div>
         </div>

@@ -39,20 +39,18 @@ export const ShareVictory: React.FC<ShareVictoryProps> = ({
     const enemyFlag = getFlagEmoji(enemy.countryFlag);
 
     if (isFree) {
-      return `I just destroyed ${enemy.username} ${enemyFlag} on WARFOG.IO
+      return `I just won a battle on WARFOG.IO
+And now my Rating is ${player.rating} !
 
-☢️ ${basesDestroyed}/5 enemy silos destroyed
 🔥 ${currentStreak} win streak | ${winRate}% overall
 
 Join WARFOG.IO
 
-#WARFOG #Solana #PvPGaming
-warfog.io`;
+#warfog #sol`;
     }
 
-    return `I just won ${solWon} SOL playing against ${enemy.username} ${enemyFlag}
+    return `I just won ${solWon} SOL playing against ${enemy.username} on WARFOG.IO
 
-☢️ ${basesDestroyed}/5 enemy silos destroyed
 🔥 ${currentStreak} win streak | ${winRate}% overall
 
 Join WARFOG.IO

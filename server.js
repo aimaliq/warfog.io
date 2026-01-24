@@ -910,7 +910,7 @@ app.post('/api/matchmaking/join', async (req, res) => {
                 player_id: playerId,
                 wallet_address: playerData.wallet_address,
                 activity_type: 'match_started',
-                details: { opponent_wallet: opponentData.wallet_address }
+                details: { opponent_wallet: opponentData.wallet_address, wager_amount: wagerAmount }
               });
 
             // Log for opponent
@@ -920,7 +920,7 @@ app.post('/api/matchmaking/join', async (req, res) => {
                 player_id: match.opponent_id,
                 wallet_address: opponentData.wallet_address,
                 activity_type: 'match_started',
-                details: { opponent_wallet: playerData.wallet_address }
+                details: { opponent_wallet: playerData.wallet_address, wager_amount: wagerAmount }
               });
           }
         }
@@ -1110,6 +1110,53 @@ app.post('/api/matchmaking/join-specific', async (req, res) => {
     if (removeError) {
       console.error('Error removing players from queue:', removeError);
       // Don't fail - match is already created
+    }
+
+    // Create activity logs for both players
+    const { data: player1Data } = await supabase
+      .from('players')
+      .select('wallet_address')
+      .eq('id', targetPlayerId)
+      .single();
+
+    const { data: player2Data } = await supabase
+      .from('players')
+      .select('wallet_address')
+      .eq('id', playerId)
+      .single();
+
+    if (player1Data?.wallet_address && player2Data?.wallet_address) {
+      // Log for target player (player1)
+      const { error: log1Error } = await supabase
+        .from('activity_logs')
+        .insert({
+          player_id: targetPlayerId,
+          wallet_address: player1Data.wallet_address,
+          activity_type: 'match_started',
+          details: { opponent_wallet: player2Data.wallet_address, wager_amount: 0 }
+        });
+
+      if (log1Error) {
+        console.error('❌ Failed to create activity log for player1:', log1Error);
+      } else {
+        console.log('✅ Activity log created for player1');
+      }
+
+      // Log for joining player (player2)
+      const { error: log2Error } = await supabase
+        .from('activity_logs')
+        .insert({
+          player_id: playerId,
+          wallet_address: player2Data.wallet_address,
+          activity_type: 'match_started',
+          details: { opponent_wallet: player1Data.wallet_address, wager_amount: 0 }
+        });
+
+      if (log2Error) {
+        console.error('❌ Failed to create activity log for player2:', log2Error);
+      } else {
+        console.log('✅ Activity log created for player2');
+      }
     }
 
     return res.json({
@@ -1509,20 +1556,32 @@ app.post('/api/game/submit-turn', async (req, res) => {
           console.log(`📊 Rating changes: Winner ${winnerRating} → ${winnerRating + winnerRatingChange} (+${winnerRatingChange}), Loser ${loserRating} → ${loserRating + loserRatingChange} (${loserRatingChange})`);
 
           // Winner stats + rating
-          await supabase.rpc('increment_player_stats', {
+          const { data: winnerStatsData, error: winnerStatsError } = await supabase.rpc('increment_player_stats', {
             p_player_id: winnerId,
             p_wins: 1,
             p_losses: 0,
             p_rating_change: winnerRatingChange
           });
 
+          if (winnerStatsError) {
+            console.error('❌ Failed to update winner stats:', winnerStatsError);
+          } else {
+            console.log('✅ Winner stats updated successfully');
+          }
+
           // Loser stats + rating
-          await supabase.rpc('increment_player_stats', {
+          const { data: loserStatsData, error: loserStatsError } = await supabase.rpc('increment_player_stats', {
             p_player_id: loserId,
             p_wins: 0,
             p_losses: 1,
             p_rating_change: loserRatingChange
           });
+
+          if (loserStatsError) {
+            console.error('❌ Failed to update loser stats:', loserStatsError);
+          } else {
+            console.log('✅ Loser stats updated successfully');
+          }
         }
 
         console.log(`✅ Match ${matchId} completed`);

@@ -480,3 +480,21 @@ button.wallet-adapter-button[aria-expanded] {
 .grid-scroll-overlay {
   animation: grid-scroll 4s linear infinite;
 }
+
+/* Rating chart current point glow animation */
+@keyframes rating-glow {
+  0%, 100% {
+    opacity: 1;
+    stroke-width: 2;
+    filter: drop-shadow(0 0 2px #fbbf24);
+  }
+  50% {
+    opacity: 0.6;
+    stroke-width: 3;
+    filter: drop-shadow(0 0 8px #fbbf24);
+  }
+}
+
+.rating-current-glow {
+  animation: rating-glow 2s ease-in-out infinite;
+}
