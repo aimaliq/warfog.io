@@ -21,7 +21,7 @@ body {
   font-weight: 700;
   font-size: 14px;
   padding: 12px 24px;
-  border-radius: 2px;
+  border-radius: 9999px;
   transition: all 0.3s ease;
   box-shadow: 0 0 20px rgba(132, 204, 22, 0.3);
   width: 100%;
@@ -53,7 +53,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-radius: 4px;
+  border-radius: 9999px;
 }
 
 .wallet-custom .wallet-adapter-button:hover:not([disabled]) {

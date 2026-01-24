@@ -374,8 +374,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
             </div>
           </div>
 
-          {/* WARFOG Balance - Full Width */}
-          {connected && publicKey && (
+          {/* WARFOG Balance - TEMPORARILY HIDDEN FOR FREE MATCHES TESTING */}
+          {/* {connected && publicKey && (
             <div className="mb-3 space-y-2">
               <div className="border border-lime-700 rounded px-3 py-2 flex justify-between items-center">
                 <span className="text-center font-bold">
@@ -423,7 +423,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
               </div>
 
               {/* Deposit Section */}
-              {isDepositOpen && (
+              {/* {isDepositOpen && (
                 <div className="border rounded border-lime-700 p-3 bg-black/40 animate-fadeIn">
                   <div className="space-y-3">
                     <div>
@@ -434,7 +434,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                         min="0.1"
                         value={depositAmount}
                         onChange={(e) => setDepositAmount(e.target.value)}
-                        className="w-full bg-black/40 border-2 rounded border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors"
+                        className="w-full bg-black/40 border-2 rounded-full border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors"
                         placeholder="0"
                       />
                       <p className="text-xs text-gray-600 mt-1">Transfer SOL from your wallet to your game balance</p>
@@ -460,10 +460,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                     </button>
                   </div>
                 </div>
-              )}
+              )} */}
 
               {/* Withdraw Section */}
-              {isWithdrawOpen && (
+              {/* {isWithdrawOpen && (
                 <div className="border rounded border-amber-700 p-3 bg-black/40 animate-fadeIn">
                   <div className="space-y-3">
                     <div>
@@ -502,10 +502,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                     </button>
                   </div>
                 </div>
-              )}
+              )} */}
 
               {/* Transaction History Section */}
-              {isHistoryOpen && (
+              {/* {isHistoryOpen && (
                 <div className="border border-gray-500 rounded p-3 bg-black/40 animate-fadeIn">
                   <div className="max-h-[300px] overflow-y-auto">
                     {isLoadingTransactions ? (
@@ -575,11 +575,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                 </div>
               )}
             </div>
-          )}
+          )} */}
 
           <button
             onClick={() => setIsEditOpen(!isEditOpen)}
-            className="w-full border-2 rounded border-lime-900 text-lime-500 font-bold hover:bg-lime-900/20 transition-all flex items-center justify-center gap-2 py-2"
+            className="w-full border-2 rounded-full border-lime-900 text-lime-500 font-bold hover:bg-lime-900/20 transition-all flex items-center justify-center gap-2 py-2"
           >
             <span className="material-icons-outlined text-sm">
               {isEditOpen ? 'expand_less' : 'edit'}
@@ -598,7 +598,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                   value={editUsername}
                   onChange={(e) => setEditUsername(e.target.value)}
                   maxLength={20}
-                  className="w-full bg-black/40 border-2 rounded border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors"
+                  className="w-full bg-black/40 border-2 rounded-full border-gray-700 text-white font-bold px-4 py-2 focus:border-gray-700 focus:outline-none transition-colors"
                   placeholder="Enter username"
                 />
               </div>
@@ -610,16 +610,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                   <select
                     value={editCountry}
                     onChange={(e) => setEditCountry(e.target.value)}
-                    className="w-full bg-black/40 border-2 rounded border-lime-900 text-lime-500 font-bold px-4 py-2 focus:border-lime-500 focus:outline-none transition-colors appearance-none cursor-pointer"
+                    className="w-full bg-black/40 border-2 rounded-full border-gray-700 text-white font-bold px-4 py-2 focus:border-gray-700 focus:outline-none transition-colors appearance-none cursor-pointer"
                   >
                     {COUNTRY_CODES.map((code) => (
-                      <option key={code} value={code} className="bg-black text-lime-500">
+                      <option key={code} value={code} className="bg-black text-white">
                         {code.toUpperCase()}
                       </option>
                     ))}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <FlagIcon countryCode={editCountry} width="32px" height="24px" />
+                    <FlagIcon countryCode={editCountry} width="28px" height="21px" />
                   </div>
                 </div>
               </div>
@@ -631,7 +631,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                 </div>
               )}
               {saveSuccess && (
-                <div className="bg-lime-900/20 border rounded border-lime-700 px-3 py-2">
+                <div className="px-3 py-2">
                   <span className="text-lime-500 text-xs font-bold">✓ Changes saved successfully!</span>
                 </div>
               )}
@@ -641,14 +641,14 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
                 <button
                   onClick={handleSaveProfile}
                   disabled={isSaving}
-                  className="flex-1 py-2 bg-lime-900/40 border-2 rounded border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2 bg-lime-900/40 border-2 rounded-full border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSaving ? 'SAVING...' : 'SAVE CHANGES'}
                 </button>
                 <button
                   onClick={handleCancelEdit}
                   disabled={isSaving}
-                  className="flex-1 py-2 border-2 rounded border-gray-700 text-gray-500 font-bold hover:bg-gray-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2 border-2 rounded-full border-gray-700 text-gray-500 font-bold hover:bg-gray-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   CANCEL
                 </button>
@@ -662,13 +662,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           {/* Row 1: Battles, Rank, Rating */}
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">BATTLES</div>
-            <div className="text-2xl text-lime-500 font-black font-mono">{player.gamesPlayed}</div>
+            <div className="text-2xl text-gray-300 font-black font-mono">{player.gamesPlayed}</div>
           </div>
 
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-2 tracking-widest">RANK</div>
             <div className="flex justify-between items-center">
-              <div className="text-2xl text-lime-500 font-black font-mono">
+              <div className="text-2xl text-gray-300 font-black font-mono">
                 {player.isGuest ? '—' : isLoadingRank ? '#' : globalRank ? `#${globalRank}` : '—'}
               </div>
             </div>
@@ -682,23 +682,23 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">RATING</div>
-            <div className="text-2xl text-yellow-400 font-black font-mono">{player.rating || 500}</div>
+            <div className="text-2xl text-yellow-500 font-black font-mono">{player.rating || 500}</div>
           </div>
 
           {/* Row 2: Victories, SOL Won, Win Rate */}
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">VICTORIES</div>
-            <div className="text-2xl text-lime-500 font-black font-mono">{player.wins}</div>
+            <div className="text-2xl text-gray-300 font-black font-mono">{player.wins}</div>
           </div>
 
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">SOL WON</div>
-            <div className="text-2xl text-lime-500 font-black font-mono">{(player.totalSolWon || 0).toFixed(2)}</div>
+            <div className="text-2xl text-gray-300 font-black font-mono">{(player.totalSolWon || 0).toFixed(2)}</div>
           </div>
 
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">WIN RATE</div>
-            <div className="text-2xl text-lime-500 font-black font-mono">{winRate}%</div>
+            <div className="text-2xl text-gray-300 font-black font-mono">{winRate}%</div>
           </div>
         </div>
 
@@ -770,7 +770,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
         <div className="mt-6 text-center">
           <button
             onClick={onNavigateToTerms}
-            className="text-lime-500 hover:text-lime-400 transition-colors text-xs"
+            className="text-gray-400 hover:text-gray-500 transition-colors text-xs"
           >
             Terms of Service
           </button>

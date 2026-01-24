@@ -803,8 +803,8 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
     }
   }, [gameState.phase, gameState.currentTurn, player.pendingHP, player.id, enemy.id]);
 
-  // Play beep sound using Web Audio API
-  const playBeep = useCallback(() => {
+  // Play beep sound using Web Audio API with ascending pitch based on time remaining
+  const playBeep = useCallback((timeLeftMs: number) => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
@@ -813,8 +813,14 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
 
-      // Beep configuration
-      oscillator.frequency.value = 900; // Hz - adjust for pitch
+      // Calculate pitch based on seconds remaining (ascending tension)
+      // 10s = 900 Hz, 9s = 930 Hz, ..., 1s = 1170 Hz, 0s = 1200 Hz
+      const secondsLeft = Math.floor(timeLeftMs / 1000);
+      const basePitch = 900;
+      const pitchIncrement = 30; // 30 Hz per second
+      const pitch = basePitch + (10 - secondsLeft) * pitchIncrement;
+
+      oscillator.frequency.value = pitch; // Ascending pitch creates tension
       oscillator.type = 'sine'; // Clean sine wave
 
       // Volume envelope (fade out quickly)
@@ -955,11 +961,11 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
       if (currentSec <= 1) {
         // From 2→1 and 1→0: continuous rapid beeping (6 beeps per transition for smoothness)
         for (let i = 0; i < 6; i++) {
-          setTimeout(() => playBeep(), i * 180); // 180ms apart = ~5.5 beeps per second, 12 total
+          setTimeout(() => playBeep(gameState.turnTimeLeft), i * 180); // 180ms apart = ~5.5 beeps per second, 12 total
         }
       } else {
         // Normal beep for other seconds
-        playBeep();
+        playBeep(gameState.turnTimeLeft);
       }
 
       // Clear any existing timer before setting a new one
