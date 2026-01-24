@@ -91,8 +91,12 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
       }, fetchQueue)
       .subscribe();
 
+    // Poll every 500ms (0.5 seconds) for instant queue updates
+    const pollInterval = setInterval(fetchQueue, 500);
+
     return () => {
       subscription.unsubscribe();
+      clearInterval(pollInterval);
     };
   }, []);
 
@@ -475,7 +479,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                 return (
                   <div
                     key={entry.queue_id}
-                    className="flex items-center mt-3 ap-2 py-3 px-3 bg-yellow-900/30 border border-yellow-500/30 hover:bg-yellow-900/30 transition-all text-xs font-bold rounded-full"
+                    className="flex items-center mt-3 ap-2 py-3 px-3 bg-yellow-900/30 border border-yellow-500/30 hover:bg-yellow-900/30 transition-all text-sm font-bold rounded-full"
                   >
                     {entry.country_code && <FlagIcon countryCode={entry.country_code} width="16px" height="12px" />}
                     <span className="text-white ml-2">{entry.username}</span>
@@ -529,10 +533,10 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                     content = (
                       <>
                         {activity.countryCode && <FlagIcon countryCode={activity.countryCode} width="16px" height="12px" />}
-                        <span className="text-white"> {username1}</span>
+                        <span className="text-white text-sm"> {username1}</span>
                         <span className="text-yellow-400"> vs </span>
                         {activity.opponentCountryCode && <FlagIcon countryCode={activity.opponentCountryCode} width="16px" height="12px" />}
-                        <span className="text-white"> {username2}</span>
+                        <span className="text-white text-sm"> {username2}</span>
                       </>
                     );
                   }

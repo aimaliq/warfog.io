@@ -953,6 +953,8 @@ app.post('/api/matchmaking/leave', async (req, res) => {
   try {
     const { playerId } = req.body;
 
+    console.log(`🚫 Cancel/Leave request for player: ${playerId}`);
+
     if (!playerId) {
       return res.status(400).json({ error: 'Missing playerId' });
     }
@@ -962,7 +964,6 @@ app.post('/api/matchmaking/leave', async (req, res) => {
       .from('matchmaking_queue')
       .select('wager_amount')
       .eq('player_id', playerId)
-      .eq('status', 'waiting')
       .single();
 
     if (queueError || !queueEntry) {
@@ -973,8 +974,7 @@ app.post('/api/matchmaking/leave', async (req, res) => {
     const { error: deleteError } = await supabase
       .from('matchmaking_queue')
       .delete()
-      .eq('player_id', playerId)
-      .eq('status', 'waiting');
+      .eq('player_id', playerId);
 
     if (deleteError) {
       console.error('Error removing from queue:', deleteError);
@@ -1025,11 +1025,87 @@ app.post('/api/matchmaking/leave', async (req, res) => {
   }
 });
 
-// Alias for cancel (same as leave)
+// Cancel matchmaking (alias for leave)
 app.post('/api/matchmaking/cancel', async (req, res) => {
-  // Forward to leave endpoint
-  req.url = '/api/matchmaking/leave';
-  return app._router.handle(req, res, () => {});
+  try {
+    const { playerId } = req.body;
+
+    console.log(`🚫 Cancel request for player: ${playerId}`);
+
+    if (!playerId) {
+      return res.status(400).json({ error: 'Missing playerId' });
+    }
+
+    // Get queue entry to find wager amount for refund
+    const { data: queueEntry, error: queueError } = await supabase
+      .from('matchmaking_queue')
+      .select('wager_amount')
+      .eq('player_id', playerId)
+      .single();
+
+    if (queueError || !queueEntry) {
+      console.log(`⚠️ Player ${playerId} not found in queue (might have been already removed)`);
+      return res.status(404).json({ error: 'Player not in queue' });
+    }
+
+    console.log(`🗑️ Deleting player ${playerId} from queue (wager: ${queueEntry.wager_amount})...`);
+
+    // Remove from queue
+    const { data: deleteData, error: deleteError } = await supabase
+      .from('matchmaking_queue')
+      .delete()
+      .eq('player_id', playerId)
+      .select();
+
+    if (deleteError) {
+      console.error('❌ Error removing from queue:', deleteError);
+      throw deleteError;
+    }
+
+    console.log(`✅ Deleted ${deleteData?.length || 0} row(s) from queue for player ${playerId}`);
+
+    // Refund balance (only for wagered matches, wager_amount = 0 for free matches)
+    if (queueEntry.wager_amount > 0) {
+      const { data: player, error: playerError } = await supabase
+        .from('players')
+        .select('game_balance')
+        .eq('id', playerId)
+        .single();
+
+      if (playerError || !player) {
+        console.error('Warning: Player not found for refund:', playerError);
+        return res.json({
+          success: true,
+          refundedAmount: queueEntry.wager_amount,
+          warning: 'Removed from queue but could not refund balance'
+        });
+      }
+
+      const { error: refundError } = await supabase
+        .from('players')
+        .update({ game_balance: player.game_balance + queueEntry.wager_amount })
+        .eq('id', playerId);
+
+      if (refundError) {
+        console.error('Error refunding balance:', refundError);
+      }
+
+      console.log(`❌ Player ${playerId} cancelled queue. Refunded ${queueEntry.wager_amount} SOL`);
+    } else {
+      console.log(`❌ Player ${playerId} cancelled free match queue`);
+    }
+
+    res.json({
+      success: true,
+      refundedAmount: queueEntry.wager_amount
+    });
+
+  } catch (error) {
+    console.error('❌ Cancel queue error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to cancel queue'
+    });
+  }
 });
 
 // ==============================================
@@ -1254,8 +1330,7 @@ setInterval(async () => {
         *,
         match:matches!game_states_match_id_fkey(*)
       `)
-      .lt('turn_started_at', sixtySecondsAgo)
-      .neq('player1_ready', 'player2_ready'); // XOR - one true, one false
+      .lt('turn_started_at', sixtySecondsAgo);
 
     if (queryError) {
       console.error('Error querying abandoned turns:', queryError);
@@ -1266,9 +1341,18 @@ setInterval(async () => {
       return; // No abandoned turns
     }
 
-    console.log(`⏰ Found ${gameStates.length} abandoned turn(s)...`);
+    // Filter for XOR condition: one player ready, the other not
+    const abandonedTurns = gameStates.filter(state =>
+      state.player1_ready !== state.player2_ready
+    );
 
-    for (const state of gameStates) {
+    if (abandonedTurns.length === 0) {
+      return; // No abandoned turns after filtering
+    }
+
+    console.log(`⏰ Found ${abandonedTurns.length} abandoned turn(s)...`);
+
+    for (const state of abandonedTurns) {
       try {
         const match = state.match;
 
