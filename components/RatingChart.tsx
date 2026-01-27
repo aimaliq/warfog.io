@@ -21,7 +21,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
     const ticks = [480, 500, 520];
 
     return (
-      <div className="w-full bg-black/40 border border-gray-500/40 rounded-2xl p-4">
+      <div className="w-full bg-gray-900/80 border border-gray-700/30 rounded-3xl p-4">
         {/* Header row */}
         <div className="flex items-start justify-between mb-1">
           <span className="text-gray-500 text-[10px] font-mono tracking-widest uppercase">YOUR RATING</span>
@@ -29,7 +29,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
         </div>
         {/* Rating number */}
         <div className="flex items-center mb-3">
-          <span className="text-lime-500 font-black text-3xl font-mono">{currentRating}</span>
+          <span className="text-gray-300 font-black text-3xl font-mono">{currentRating}</span>
         </div>
         <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
           <defs>

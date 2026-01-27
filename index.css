@@ -27,8 +27,27 @@ body {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 0px !important;
-  width: auto !important;
+  gap: 6px !important;
+  width: 100% !important;
+}
+
+/* Generic wallet icon when disconnected (no start-icon from adapter) */
+.wallet-adapter-button::before {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12V7H5a2 2 0 0 1 0-4h14v4'/%3E%3Cpath d='M3 5v14a2 2 0 0 0 2 2h16v-5'/%3E%3Cpath d='M18 12a2 2 0 0 0 0 4h4v-4Z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+}
+
+/* Hide generic icon when connected (adapter provides its own icon) */
+.wallet-adapter-button-has-balance::before,
+.wallet-adapter-button[aria-label]:not([aria-label=""])::before,
+.wallet-adapter-button:has(.wallet-adapter-button-start-icon)::before {
+  display: none !important;
 }
 
 .wallet-adapter-button::after {
@@ -50,6 +69,10 @@ body {
   color: #ffffff !important;
 }
 
+.wallet-adapter-button:hover:not([disabled])::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12V7H5a2 2 0 0 1 0-4h14v4'/%3E%3Cpath d='M3 5v14a2 2 0 0 0 2 2h16v-5'/%3E%3Cpath d='M18 12a2 2 0 0 0 0 4h4v-4Z'/%3E%3C/svg%3E");
+}
+
 .wallet-adapter-button:hover:not([disabled])::after {
   color: #ffffff;
 }
@@ -59,20 +82,20 @@ body {
   cursor: not-allowed;
 }
 
-/* Wallet icon */
+/* Wallet icon (from adapter when connected) */
 .wallet-adapter-button-start-icon,
 .wallet-adapter-button-end-icon {
   display: flex !important;
   align-items: center;
   justify-content: center;
   width: 16px !important;
-  height: 17px !important;
+  height: 16px !important;
 }
 
 .wallet-adapter-button-start-icon svg,
 .wallet-adapter-button-start-icon img {
   width: 16px !important;
-  height: 17px !important;
+  height: 16px !important;
 }
 
 /* Hide collapse/expand buttons */

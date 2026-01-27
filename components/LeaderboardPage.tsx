@@ -29,7 +29,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
 
         {/* Guest Warning - Tactical */}
         {player.isGuest && (
-          <div className="relative bg-yellow-900/10 border rounded-lg border-yellow-600/50 px-2 py-2 mb-3 overflow-hidden">
+          <div className="relative bg-yellow-900/10 border rounded-3xl border-yellow-600/50 px-2 py-2 mb-3 overflow-hidden">
             <div className="flex items-center justify-center gap-2 font-mono">
               <span className="text-yellow-500 text-xs tracking-wider">⚠ Login </span>
               <span className="text-yellow-600/50">|</span>
@@ -72,7 +72,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
               return (
                 <div
                   key={entry.wallet || entry.rank}
-                  className={`relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 sm:py-4 rounded-lg border transition-all ${
+                  className={`relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 sm:py-4 rounded-3xl border transition-all ${
                     isCurrentPlayer
                       ? 'bg-lime-700/20 border-lime-600'
                       : 'bg-gray-900/60 border-gray-700/30 hover:border-gray-600/40'
