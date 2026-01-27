@@ -367,17 +367,17 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
   };
 
   return (
-    <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
+    <div className="flex flex-col items-center px-4 py-6 lg:ml-64">
       <div className="w-full max-w-2xl">
 
         {/* Header - Wallet Button */}
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="lg:hidden text-3xl font-black text-lime-500">PROFILE</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="lg:hidden text-3xl font-black tracking-[0.05em]" style={{ color: '#21bd5a', fontFamily: "'Orbitron', sans-serif" }}>PROFILE</h1>
           <WalletButton className="wallet-custom lg:ml-auto" />
         </div>
 
         {/* Desktop Title */}
-        <h1 className="hidden lg:block text-3xl font-black text-lime-500 mb-8">PROFILE</h1>
+        <h1 className="hidden lg:block text-3xl font-black tracking-[0.05em] mb-6" style={{ color: '#21bd5a', fontFamily: "'Orbitron', sans-serif" }}>PROFILE</h1>
 
         {/* Profile Card */}
         <div className="bg-black/60 p-6">

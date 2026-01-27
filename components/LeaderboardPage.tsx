@@ -14,27 +14,22 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
   const { leaderboard, isLoading } = useLeaderboard();
   const changes = useLeaderboardChanges(leaderboard);
   return (
-    <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
+    <div className="flex flex-col items-center px-4 py-6 lg:ml-64">
       <div className="w-full max-w-4xl">
 
         {/* Header - Wallet Button */}
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="lg:hidden text-3xl font-black text-lime-500">LEADERS</h1>
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="lg:hidden text-3xl font-black tracking-[0.05em]" style={{ color: '#21bd5a', fontFamily: "'Orbitron', sans-serif" }}>LEADERS</h1>
           <WalletButton className="wallet-custom lg:ml-auto" />
         </div>
 
         <div className="relative mb-6">
-            <h1 className="hidden lg:block text-3xl font-black text-lime-500 mb-8">LEADERS</h1>
+            <h1 className="hidden lg:block text-3xl font-black tracking-[0.05em] mb-4" style={{ color: '#21bd5a', fontFamily: "'Orbitron', sans-serif" }}>LEADERS</h1>
         </div>
 
         {/* Guest Warning - Tactical */}
         {player.isGuest && (
-          <div className="relative bg-yellow-900/10 border border-yellow-600/50 px-4 py-3 mb-6 overflow-hidden">
-            <div className="absolute top-0 left-0 w-6 h-6 border-t border-l border-yellow-600/70"></div>
-            <div className="absolute top-0 right-0 w-6 h-6 border-t border-r border-yellow-600/70"></div>
-            <div className="absolute bottom-0 left-0 w-6 h-6 border-b border-l border-yellow-600/70"></div>
-            <div className="absolute bottom-0 right-0 w-6 h-6 border-b border-r border-yellow-600/70"></div>
-
+          <div className="relative bg-yellow-900/10 border rounded-lg border-yellow-600/50 px-2 py-2 mb-3 overflow-hidden">
             <div className="flex items-center justify-center gap-2 font-mono">
               <span className="text-yellow-500 text-xs tracking-wider">⚠ Login </span>
               <span className="text-yellow-600/50">|</span>
@@ -43,88 +38,80 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
           </div>
         )}
 
-        {/* FOMO Ticker */}
-        <FOMOTicker changes={changes} />
+        {/* Table Header */}
+        <div className="grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-2 text-gray-400 font-mono text-xs tracking-widest">
+          <div className="col-span-1 flex items-center justify-center ml-2">#</div>
+          <div className="col-span-1"></div>
+          <div className="col-span-5 sm:col-span-6">PLAYER</div>
+          <div className="col-span-5 sm:col-span-4 flex items-center justify-end pr-2">RATING</div>
+        </div>
 
-        {/* Leaderboard Table - Tactical */}
-        <div className="relative bg-black/90 border border-lime-500/40 shadow-[0_0_30px_rgba(0,255,0,0.1)]">
-          {/* Corner decorations */}
-          <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-lime-500/70"></div>
-          <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-lime-500/70"></div>
-          <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-lime-500/70"></div>
-          <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-lime-500/70"></div>
+        {/* Leaderboard Rows */}
+        <div className="flex flex-col gap-2">
+          {isLoading ? (
+            <div className="text-center py-8 text-gray-500">
+              Loading leaderboard...
+            </div>
+          ) : leaderboard.length === 0 ? (
+            <div className="text-center text-sm py-8 text-gray-500">
+              No players on leaderboard yet
+            </div>
+          ) : (
+            leaderboard.map((entry) => {
+              const isCurrentPlayer = entry.wallet === player.walletAddress;
+              const walletDisplay = entry.wallet
+                ? `${entry.wallet.slice(0, 4)}..${entry.wallet.slice(-4)}`
+                : 'Anonymous';
 
-          {/* Table Header */}
-          <div className="relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 bg-lime-950/30 border-b border-lime-500/30 text-gray-300 font-bold font-mono text-sm tracking-widest">
-            <div className="col-span-1 flex items-center justify-center ml-2">#</div>
-            <div className="col-span-1"></div>
-            <div className="col-span-1"></div>
-            <div className="col-span-4 sm:col-span-5">PLAYER</div>
-            <div className="col-span-5 sm:col-span-4 flex items-center justify-center">RATING⚡</div>
-          </div>
+              const rankColor = entry.rank === 1 ? 'text-yellow-400' : entry.rank === 2 ? 'text-gray-300' : entry.rank === 3 ? 'text-orange-400' : 'text-gray-500';
 
-          {/* Table Rows */}
-          <div className="divide-y divide-lime-900/30">
-            {isLoading ? (
-              <div className="text-center py-8 text-gray-500">
-                Loading leaderboard...
-              </div>
-            ) : leaderboard.length === 0 ? (
-              <div className="text-center text-sm py-8 text-gray-500">
-                No players on leaderboard yet
-              </div>
-            ) : (
-              leaderboard.map((entry) => {
-                const isCurrentPlayer = entry.wallet === player.walletAddress;
-                const walletDisplay = entry.wallet
-                  ? `${entry.wallet.slice(0, 4)}..${entry.wallet.slice(-4)}`
-                  : 'Anonymous';
+              // Rating arrow: up if wins > losses, down if losses > wins, dash if equal
+              const ratingDirection = entry.wins > entry.losses ? 'up' : entry.losses > entry.wins ? 'down' : 'neutral';
+              const arrowColor = ratingDirection === 'up' ? 'text-lime-400' : ratingDirection === 'down' ? 'text-red-400' : 'text-gray-500';
 
-                const isTopThree = entry.rank <= 3;
-                const rankBadge = entry.rank === 1 ? '# ' : entry.rank === 2 ? '# ' : entry.rank === 3 ? '# ' : '# ';
-                const rankColor = entry.rank === 1 ? 'text-yellow-400' : entry.rank === 2 ? 'text-gray-300' : entry.rank === 3 ? 'text-orange-400' : 'text-gray-500';
-
-                return (
-                  <div
-                    key={entry.wallet || entry.rank}
-                    className={`relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 sm:py-4 hover:bg-lime-900/20 transition-all border-l-2 ${
-                      isCurrentPlayer
-                        ? 'bg-yellow-700/20 border-yellow-400 shadow-[inset_0_0_20px_rgba(234,179,8,0.08)]'
-                        : isTopThree
-                        ? 'bg-lime-950/20 border-lime-700/30'
-                        : 'border-transparent'
-                    }`}
-                  >
-
-
-                    <div className={`col-span-1 flex items-center justify-center font-black font-mono text-xs sm:text-base ml-2 ${rankColor}`}>
-                      {isTopThree && <span className="mr-1">{rankBadge}</span>}
-                      {String(entry.rank).padStart(2, '0')}
+              return (
+                <div
+                  key={entry.wallet || entry.rank}
+                  className={`relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 sm:py-4 rounded-lg border transition-all ${
+                    isCurrentPlayer
+                      ? 'bg-lime-700/20 border-lime-600'
+                      : 'bg-gray-900/60 border-gray-700/30 hover:border-gray-600/40'
+                  }`}
+                >
+                  <div className={`col-span-1 flex items-center justify-center font-black font-mono text-sm sm:text-base ml-2 ${rankColor}`}>
+                    {String(entry.rank).padStart(2, '0')}
+                  </div>
+                  <div className="col-span-1 ml-1 flex items-center justify-center">
+                    <FlagIcon countryCode={entry.countryFlag} width="24px" height="18px" className="sm:w-[28px] sm:h-[20px]" />
+                  </div>
+                  <div className="col-span-5 sm:col-span-6 flex flex-col justify-center pl-1">
+                    <div className="text-white text-[14px] sm:text-base font-mono tracking-wider">
+                      {entry.username}
                     </div>
-                    <div className="col-span-1 flex items-center justify-center"></div>
-                    <div className="col-span-1 flex items-center justify-center">
-                      <FlagIcon countryCode={entry.countryFlag} width="24px" height="18px" className="sm:w-[40px] sm:h-[28px]" />
-                    </div>
-                    <div className="col-span-4 pl-2">
-                      <div className="text-white text-[14px] sm:text-base font-mono tracking-wider">
-                        {entry.username}
-                      <div className="text-[11px] sm:text-[12px] text-lime-500 truncate font-mono tracking-wide">
-                        {walletDisplay}
-                      </div>
-                      </div>
-                    </div>
-                    <div className="col-span-5 sm:col-span-4 flex items-center justify-center">
-                      <div className="inline-block px-2 sm:px-3 py-1">
-                        <span className="text-yellow-400 font-bold font-mono text-[18px] sm:text-base tracking-wider">
-                          {entry.rating}
-                        </span>
-                      </div>
+                    <div className="text-[11px] sm:text-[12px] font-mono tracking-wide">
+                      <span className="text-gray-500">{walletDisplay}</span>
+                      <span className="text-gray-600 mx-1">·</span>
+                      <span className="text-lime-500">{Math.round(entry.winRate)}% WR</span>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
+                  <div className="col-span-5 sm:col-span-4 flex items-center justify-end pr-2">
+                    <span className="text-white font-bold font-mono text-[18px] sm:text-lg tracking-wider">
+                      {entry.rating}
+                    </span>
+                    <span className={`ml-1.5 ${arrowColor}`}>
+                      {ratingDirection === 'up' ? (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
+                      ) : ratingDirection === 'down' ? (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7v10h10"/><path d="M17 7 7 17"/></svg>
+                      ) : (
+                        <span className="text-sm font-mono">—</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Footer Info - Tactical */}

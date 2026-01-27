@@ -1584,7 +1584,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
                        window.open(tweetUrl, '_blank', 'width=550,height=420');
                      }}
-                     className="flex-1 py-3 px-4 bg-yellow-900/20 border-2 border-yellow-400 text-yellow-400 font-bold font-mono text-xs tracking-wider hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse"
+                     className="flex-1 py-3 px-4 bg-yellow-900/20 border-2 rounded-3xl border-yellow-400 text-yellow-400 font-bold font-mono text-xs tracking-wider hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse"
                    >
                      SHARE ON X
                    </button>
@@ -1599,7 +1599,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                          console.error('Failed to copy:', err);
                        }
                      }}
-                     className="flex-1 py-3 px-4 bg-yellow-900/20 border-2 border-yellow-400 text-yellow-400 font-bold font-mono text-xs tracking-wider hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse"
+                     className="flex-1 py-3 px-4 bg-yellow-900/20 border-2 rounded-3xl border-yellow-400 text-yellow-400 font-bold font-mono text-xs tracking-wider hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_30px_rgba(250,204,21,0.6)] hover:shadow-[0_0_40px_rgba(250,204,21,0.8)] animate-pulse"
                    >
                      COPY LINK
                    </button>
@@ -1635,7 +1635,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                         }
                       }));
                     }}
-                    className="w-64 py-3 bg-yellow-900/40 border-2 border-yellow-400 text-yellow-400 font-bold hover:bg-yellow-900/60 transition-all mb-3"
+                    className="w-64 py-3 bg-yellow-900/40 border-2 rounded-3xl border-yellow-400 text-yellow-400 font-bold hover:bg-yellow-900/60 transition-all mb-3"
                  >{isFreeMatch ? 'REMATCH' : 'REMATCH (0 SOL)'}
                  </button>
                  <button
@@ -1652,7 +1652,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                         winReason: null
                       }));
                     }}
-                    className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
+                    className="w-64 py-3 bg-lime-900/40 border-2 rounded-3xl border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
                  >RETURN BACK
                  </button>
                </>
@@ -1762,7 +1762,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                           }, 3000);
                         }
                       }}
-                      className="w-64 py-3 bg-yellow-900/40 border-2 border-yellow-400 text-yellow-400 font-bold hover:bg-yellow-900/60 transition-all mb-3"
+                      className="w-64 py-3 bg-yellow-900/40 border-2 rounded-3xl border-yellow-400 text-yellow-400 font-bold hover:bg-yellow-900/60 transition-all mb-3"
                    >REMATCH ({gameState.betAmount.toFixed(3)} SOL)
                    </button>
                  )}
@@ -1780,14 +1780,14 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                         winReason: null
                       }));
                     }}
-                    className="w-64 py-3 bg-lime-900/40 border-2 border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
+                    className="w-64 py-3 bg-lime-900/40 border-2 rounded-3xl border-lime-400 text-lime-400 font-bold hover:bg-lime-900/60 transition-all mb-6"
                  >RETURN BACK
                  </button>
                </>
              )}
 
              {/* Victory Streak Display */}
-             <div className={`w-64 px-8 py-4 border-2 ${isDraw ? 'border-yellow-400 bg-yellow-900/20' : isWin ? 'border-lime-400 bg-lime-900/20' : 'border-gray-700 bg-gray-900/20'}`}>
+             <div className={`w-64 px-8 py-4 border-2 rounded-3xl ${isDraw ? 'border-yellow-400 bg-yellow-900/20' : isWin ? 'border-lime-400 bg-lime-900/20' : 'border-gray-700 bg-gray-900/20'}`}>
                <div className="text-center">
                  <div className="text-xs text-gray-400 tracking-widest">VICTORY STREAK</div>
                  <div className={`text-3xl font-black font-mono ${isDraw ? 'text-yellow-500' : isWin ? 'text-lime-500' : 'text-gray-600'}`}>

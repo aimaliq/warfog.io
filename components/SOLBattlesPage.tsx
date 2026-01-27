@@ -263,12 +263,12 @@ export const SOLBattlesPage: React.FC<SOLBattlesPageProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center px-4 py-8 lg:ml-64">
+    <div className="flex flex-col items-center px-4 py-6 lg:ml-64">
       <div className="w-full max-w-2xl">
 
         {/* Header */}
-        <div className="mb-12 flex items-center justify-between">
-          <h1 className="lg:hidden text-3xl font-black text-lime-500">SOL BATTLES</h1>
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="lg:hidden text-3xl font-black tracking-[0.05em]" style={{ color: '#21bd5a', fontFamily: "'Orbitron', sans-serif" }}>SOL BATTLES</h1>
           <WalletButton className="wallet-custom lg:ml-auto" />
         </div>
 
@@ -573,7 +573,7 @@ export const SOLBattlesPage: React.FC<SOLBattlesPageProps> = ({
         <div className="absolute inset-0 z-30 flex items-start justify-center pt-40 bg-black/60 backdrop-blur-sm rounded">
           <div className="text-center space-y-6 px-8">
             {/* Animated Nuclear Icon */}
-            <div className="text-8xl animate-pulse">
+            <div className="text-8xl text-lime-500 animate-spin-slow">
               ☢
             </div>
 

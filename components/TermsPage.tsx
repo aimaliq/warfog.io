@@ -2,7 +2,7 @@ import React from 'react';
 
 export const TermsPage: React.FC = () => {
   return (
-    <div className="flex flex-col items-center px-4 py-8">
+    <div className="flex flex-col items-center px-4 py-6">
       <div className="w-full max-w-4xl">
 
         {/* Header */}
