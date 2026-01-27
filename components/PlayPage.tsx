@@ -28,8 +28,14 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
   const { activities } = useActivityFeed('free');
   const { onlineCount, isLoading } = useOnlinePlayers();
   const [isHowToPlayOpen, setIsHowToPlayOpen] = useState(false);
-  const [editUsername, setEditUsername] = useState(player.username === 'COMMANDER_ALPHA' ? '' : player.username);
-  const [editCountry, setEditCountry] = useState(player.countryFlag);
+  const [editUsername, setEditUsername] = useState(() => {
+    if (player.username && player.username !== 'COMMANDER_ALPHA') return player.username;
+    return localStorage.getItem('warfog_guest_username') || '';
+  });
+  const [editCountry, setEditCountry] = useState(() => {
+    if (player.countryFlag && player.countryFlag !== 'us') return player.countryFlag;
+    return localStorage.getItem('warfog_guest_country') || player.countryFlag;
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [prevPlayerId, setPrevPlayerId] = useState(player.id);
 
@@ -46,14 +52,32 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
 
   // Rating history state
   const [ratingHistory, setRatingHistory] = useState<{ rating: number; matchNumber: number }[]>([]);
+  const [lastRatingChange, setLastRatingChange] = useState<number | null>(null);
+
+  // Read last rating change from localStorage (saved by BattleScreen on game over)
+  useEffect(() => {
+    const saved = localStorage.getItem('warfog_last_rating_change');
+    if (saved !== null) {
+      setLastRatingChange(parseInt(saved, 10));
+      localStorage.removeItem('warfog_last_rating_change');
+    }
+  }, []);
 
   // Update local state when player prop changes (e.g., wallet disconnect creates new guest)
   useEffect(() => {
     // If player ID changed (new guest after wallet disconnect), update immediately
     if (player.id !== prevPlayerId) {
       setPrevPlayerId(player.id);
-      setEditUsername(player.username === 'COMMANDER_ALPHA' ? '' : player.username);
-      setEditCountry(player.countryFlag);
+      const savedUsername = localStorage.getItem('warfog_guest_username');
+      const savedCountry = localStorage.getItem('warfog_guest_country');
+      setEditUsername(
+        player.username !== 'COMMANDER_ALPHA' ? player.username
+        : savedUsername || ''
+      );
+      setEditCountry(
+        player.countryFlag !== 'us' ? player.countryFlag
+        : savedCountry || player.countryFlag
+      );
     }
   }, [player.id, player.username, player.countryFlag, prevPlayerId]);
 
@@ -128,22 +152,44 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
           return;
         }
 
-        // Calculate rating progression by simulating Elo changes
-        let currentRating = 500; // Starting rating
-        const history: { rating: number; matchNumber: number }[] = [];
+        // Calculate rating progression by working backwards from actual current rating.
+        // We know the actual current rating and the win/loss outcomes of recent matches.
+        // Reverse-simulate to estimate what rating was before each match.
+        const actualRating = player.rating || 500;
+        const K = 16;
 
-        for (let i = 0; i < matches.length; i++) {
+        // Work backwards from current rating through each DB match
+        const reversedRatings: number[] = [actualRating]; // Start with current
+        for (let i = matches.length - 1; i >= 0; i--) {
           const match = matches[i];
           const won = match.winner_id === player.id;
+          // Reverse the Elo change: if won, previous rating was lower; if lost, previous was higher
+          const ratingChange = Math.round(K * ((won ? 1 : 0) - 0.5));
+          const previousRating = Math.max(100, reversedRatings[reversedRatings.length - 1] - ratingChange);
+          reversedRatings.push(previousRating);
+        }
 
-          // Simple Elo calculation (K=16)
-          const K = 16;
-          const expectedScore = 0.5; // Assume equal opponents for simplicity
-          const actualScore = won ? 1 : 0;
-          const ratingChange = Math.round(K * (actualScore - expectedScore));
+        // Reverse to get chronological order (index 0 = before first match, last = after last match)
+        reversedRatings.reverse();
 
-          currentRating = Math.max(100, currentRating + ratingChange);
-          history.push({ rating: currentRating, matchNumber: i + 1 });
+        // Build history: skip the first entry (pre-match baseline), use post-match ratings
+        const history: { rating: number; matchNumber: number }[] = [];
+        for (let i = 1; i < reversedRatings.length; i++) {
+          history.push({ rating: reversedRatings[i], matchNumber: i });
+        }
+
+        // If we have a known lastRatingChange (from the game over screen), ensure the
+        // graph's last segment correctly shows the latest match direction.
+        // This handles the race condition where the DB may not have the latest match yet.
+        if (lastRatingChange !== null && lastRatingChange !== 0 && history.length >= 2) {
+          const expectedPrevRating = actualRating - lastRatingChange;
+          const currentLastSegment = history[history.length - 1].rating - history[history.length - 2].rating;
+
+          // If the last segment direction doesn't match (e.g., going up when it should go down),
+          // fix the second-to-last point to show the correct pre-match rating
+          if ((currentLastSegment > 0) !== (lastRatingChange > 0)) {
+            history[history.length - 2].rating = expectedPrevRating;
+          }
         }
 
         setRatingHistory(history);
@@ -153,7 +199,11 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
     };
 
     fetchRatingHistory();
-  }, [player.id, player.rating]); // Refetch when player rating changes
+
+    // Re-fetch after a delay to pick up any DB changes
+    const retryTimeout = setTimeout(fetchRatingHistory, 3000);
+    return () => clearTimeout(retryTimeout);
+  }, [player.id, player.rating, lastRatingChange]); // Refetch when player rating changes
 
   // Close tutorial modal and mark as seen
   const closeTutorialModal = () => {
@@ -242,6 +292,10 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
         if (data) playerId = data.id;
       }
 
+      // Save to localStorage so anonymous players persist across matches
+      localStorage.setItem('warfog_guest_username', editUsername);
+      localStorage.setItem('warfog_guest_country', editCountry);
+
       if (onPlayerUpdate) {
         onPlayerUpdate({
           id: playerId,
@@ -258,6 +312,47 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
     }
   };
 
+  // Ensure guest player has a database record, returns valid player ID
+  const ensurePlayerInDB = async (): Promise<string | null> => {
+    // If player already has a valid UUID (from database), use it
+    if (player.id && player.id.length > 20) return player.id;
+
+    // Guest player needs a database record
+    const username = editUsername || localStorage.getItem('warfog_guest_username') || 'Guest';
+    const country = editCountry || localStorage.getItem('warfog_guest_country') || 'us';
+
+    const { data, error } = await supabase
+      .from('players')
+      .insert({
+        username,
+        country_code: country,
+        is_guest: true,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error('Failed to create guest player:', error);
+      return null;
+    }
+
+    // Save the new player ID
+    localStorage.setItem('warfog_player_id', data.id);
+    localStorage.setItem('warfog_guest_username', username);
+    localStorage.setItem('warfog_guest_country', country);
+
+    if (onPlayerUpdate) {
+      onPlayerUpdate({
+        id: data.id,
+        username,
+        countryFlag: country,
+        isGuest: true,
+      });
+    }
+
+    return data.id;
+  };
+
   // ✅ NEW: Join matchmaking queue (free matches)
   const handleJoinQueue = async () => {
     if (!player.id || isInBattle || queueStatus !== 'idle') return;
@@ -265,11 +360,17 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
     setQueueStatus('searching');
 
     try {
+      const playerId = await ensurePlayerInDB();
+      if (!playerId) {
+        setQueueStatus('idle');
+        return;
+      }
+
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playerId: player.id,
+          playerId,
           wagerAmount: 0  // Free match
         })
       });
@@ -315,11 +416,17 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
     setQueueStatus('searching');
 
     try {
+      const playerId = await ensurePlayerInDB();
+      if (!playerId) {
+        setQueueStatus('idle');
+        return;
+      }
+
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/matchmaking/join-specific`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playerId: player.id,
+          playerId,
           targetPlayerId: opponentId
         })
       });
@@ -352,10 +459,10 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
             {onToggleMute && (
               <button
                 onClick={onToggleMute}
-                className="w-12 h-12 flex items-center justify-center bg-gray-900/60 border border-lime-900 hover:border-lime-500 rounded-full transition-all group"
+                className="w-12 h-12 flex items-center justify-center bg-gray-900/60 border border-yellow-900 hover:border-yellow-500 rounded-full transition-all group"
                 title={isMuted ? "Unmute music" : "Mute music"}
               >
-                <span className="material-icons-outlined text-lime-500 group-hover:text-lime-400 text-2xl">
+                <span className="material-icons-outlined text-yellow-500 group-hover:text-yellow-400 text-2xl">
                   {isMuted ? 'volume_off' : 'volume_up'}
                 </span>
               </button>
@@ -364,10 +471,10 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
             {/* Help/How to Play Button */}
             <button
               onClick={() => setShowTutorialModal(true)}
-              className="w-12 h-12 flex items-center justify-center bg-gray-900/60 border border-lime-900 hover:border-lime-500 rounded-full transition-all group"
+              className="w-12 h-12 flex items-center justify-center bg-gray-900/60 border border-yellow-900 hover:border-yellow-500 rounded-full transition-all group"
               title="How to play"
             >
-              <span className="text-lime-500 group-hover:text-lime-400 text-2xl font-bold">
+              <span className="text-yellow-500 group-hover:text-yellow-300 text-2xl font-bold">
                 ?
               </span>
             </button>
@@ -377,8 +484,8 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
         </div>
 
         {/* WARFOG.IO Logo - Centered and Prominent */}
-        <div className="text-center mb-12 mt-12">
-          <h1 className="text-5xl font-black text-lime-500 tracking-wider animate-pulse">WARFOG.IO</h1>
+        <div className="text-center mb-10 mt-10">
+          <h1 className="text-4xl font-black text-lime-500 tracking-wider animate-pulse">WARFOG.IO</h1>
         </div>
 
         {/* Player */}
@@ -427,8 +534,8 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
         </div>
 
         {/* Rating Chart */}
-        <div className="mb-6 max-w-md mx-auto px-3">
-          <RatingChart data={ratingHistory} currentRating={player.rating || 500} />
+        <div className="max-w-md mx-auto px-3">
+          <RatingChart data={ratingHistory} currentRating={player.rating || 500} lastRatingChange={lastRatingChange} />
         </div>
 
         {/* Battles activity Feed*/}
@@ -454,10 +561,10 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
             </button>
           ) : queueStatus === 'searching' ? (
             <div className="space-y-3">
-              <div className="w-full py-4 bg-yellow-900/40 border-2 rounded-full border-yellow-400 text-yellow-400 font-black text-xl text-center">
+              <div className="w-full py-4 bg-yellow-900/40 border-2 rounded-full border-yellow-400 text-yellow-400 font-black text-md text-center">
                 <div className="flex items-center justify-center gap-2">
                   <span className="material-icons-outlined animate-spin">refresh</span>
-                  <span>SEARCHING...</span>
+                  <span className="animate-pulse">SEARCHING OPPONENTS...</span>
                 </div>
               </div>
               <button
@@ -533,10 +640,10 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                     content = (
                       <>
                         {activity.countryCode && <FlagIcon countryCode={activity.countryCode} width="16px" height="12px" />}
-                        <span className="text-white text-sm"> {username1}</span>
+                        <span className="text-white text-[13px]"> {username1}</span>
                         <span className="text-yellow-400"> vs </span>
                         {activity.opponentCountryCode && <FlagIcon countryCode={activity.opponentCountryCode} width="16px" height="12px" />}
-                        <span className="text-white text-sm"> {username2}</span>
+                        <span className="text-white text-[13px]"> {username2}</span>
                       </>
                     );
                   }
@@ -568,7 +675,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
       {/* Tutorial Modal - First Time Only */}
       {showTutorialModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm">
-          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-black border-2 border-gray-600 mx-4">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-black border-2 rounded-xl border-gray-600 mx-4">
 
             {/* Close button */}
             <button

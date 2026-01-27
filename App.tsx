@@ -174,6 +174,7 @@ export default function App() {
           id: dbPlayer.id,
           username: dbPlayer.username,
           countryFlag: dbPlayer.country_code,
+          walletAddress: dbPlayer.wallet_address || undefined,
           isGuest: dbPlayer.is_guest,
           wins: dbPlayer.total_wins,
           losses: dbPlayer.total_losses,
@@ -190,10 +191,16 @@ export default function App() {
       // Update last_played_at when player loads (wallet connects)
       updateLastPlayedAt(dbPlayer.id);
     } else {
-      // Player disconnected - reset to initial state
+      // Player disconnected - reset to initial state but restore saved guest profile
+      const savedUsername = localStorage.getItem('warfog_guest_username');
+      const savedCountry = localStorage.getItem('warfog_guest_country');
       setGameState(prev => ({
         ...prev,
-        player1: INITIAL_PLAYER,
+        player1: {
+          ...INITIAL_PLAYER,
+          username: savedUsername || INITIAL_PLAYER.username,
+          countryFlag: savedCountry || INITIAL_PLAYER.countryFlag,
+        },
       }));
     }
   }, [dbPlayer]);
@@ -267,11 +274,12 @@ export default function App() {
           player={gameState.player1}
           onStartBattle={(matchId?: string) => {
             setCurrentMatchId(matchId || null);
-            // Reset game state for new battle
-            setGameState({
+            // Reset game state for new battle - use functional update to get latest state
+            // (ensurePlayerInDB may have updated player1.id just before this call)
+            setGameState(prev => ({
               ...INITIAL_GAME_STATE,
               player1: {
-                ...gameState.player1,
+                ...prev.player1,
                 bases: createBases(),
                 basesDestroyed: 0,
                 totalHP: 10,
@@ -280,7 +288,7 @@ export default function App() {
                 pendingHP: 0,
               },
               player2: {
-                ...gameState.player2,
+                ...prev.player2,
                 bases: createBases(),
                 basesDestroyed: 0,
                 totalHP: 10,
@@ -290,7 +298,7 @@ export default function App() {
               },
               phase: GamePhase.MATCHMAKING,
               betAmount: 0,
-            });
+            }));
           }}
           onPlayerUpdate={handlePlayerUpdate}
           isInBattle={gameState.phase !== GamePhase.LOBBY}
@@ -304,11 +312,11 @@ export default function App() {
           player={gameState.player1}
           onStartBattle={(matchId?: string) => {
             setCurrentMatchId(matchId || null);
-            // Reset game state for new battle
-            setGameState({
+            // Reset game state for new battle - use functional update to get latest state
+            setGameState(prev => ({
               ...INITIAL_GAME_STATE,
               player1: {
-                ...gameState.player1,
+                ...prev.player1,
                 bases: createBases(),
                 basesDestroyed: 0,
                 totalHP: 10,
@@ -317,7 +325,7 @@ export default function App() {
                 pendingHP: 0,
               },
               player2: {
-                ...gameState.player2,
+                ...prev.player2,
                 bases: createBases(),
                 basesDestroyed: 0,
                 totalHP: 10,
@@ -327,7 +335,7 @@ export default function App() {
               },
               phase: GamePhase.MATCHMAKING,
               betAmount: 0,
-            });
+            }));
           }}
           isInBattle={gameState.phase !== GamePhase.LOBBY}
         />

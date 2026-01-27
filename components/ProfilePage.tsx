@@ -37,14 +37,26 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  // Local state for currently displayed values
-  const [currentUsername, setCurrentUsername] = useState(player.username);
-  const [currentCountry, setCurrentCountry] = useState(player.countryFlag);
+  // Local state for currently displayed values (restore from localStorage for guests)
+  const [currentUsername, setCurrentUsername] = useState(() => {
+    if (player.username && player.username !== 'COMMANDER_ALPHA') return player.username;
+    return localStorage.getItem('warfog_guest_username') || player.username;
+  });
+  const [currentCountry, setCurrentCountry] = useState(() => {
+    if (player.countryFlag && player.countryFlag !== 'us') return player.countryFlag;
+    return localStorage.getItem('warfog_guest_country') || player.countryFlag;
+  });
   const [gameBalance, setGameBalance] = useState(0);
 
   // Edit state (what user is typing)
-  const [editUsername, setEditUsername] = useState(player.username);
-  const [editCountry, setEditCountry] = useState(player.countryFlag);
+  const [editUsername, setEditUsername] = useState(() => {
+    if (player.username && player.username !== 'COMMANDER_ALPHA') return player.username;
+    return localStorage.getItem('warfog_guest_username') || player.username;
+  });
+  const [editCountry, setEditCountry] = useState(() => {
+    if (player.countryFlag && player.countryFlag !== 'us') return player.countryFlag;
+    return localStorage.getItem('warfog_guest_country') || player.countryFlag;
+  });
   const [depositAmount, setDepositAmount] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
@@ -63,13 +75,18 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
   // Sync local state with player prop changes (for immediate UI updates on wallet connect/disconnect)
   useEffect(() => {
-    setCurrentUsername(player.username);
-    setCurrentCountry(player.countryFlag);
+    const savedUsername = localStorage.getItem('warfog_guest_username');
+    const savedCountry = localStorage.getItem('warfog_guest_country');
+    const username = (player.username !== 'COMMANDER_ALPHA') ? player.username : (savedUsername || player.username);
+    const country = (player.countryFlag !== 'us') ? player.countryFlag : (savedCountry || player.countryFlag);
+
+    setCurrentUsername(username);
+    setCurrentCountry(country);
 
     // Only update edit fields if edit modal is closed (don't overwrite user's typing)
     if (!isEditOpen) {
-      setEditUsername(player.username);
-      setEditCountry(player.countryFlag);
+      setEditUsername(username);
+      setEditCountry(country);
     }
   }, [player.username, player.countryFlag, isEditOpen]);
 
@@ -159,6 +176,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
       // Update local displayed state immediately
       setCurrentUsername(editUsername);
       setCurrentCountry(editCountry);
+
+      // Save to localStorage for guest persistence
+      localStorage.setItem('warfog_guest_username', editUsername);
+      localStorage.setItem('warfog_guest_country', editCountry);
 
       // Update parent component state
       if (onPlayerUpdate) {
@@ -632,7 +653,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
               )}
               {saveSuccess && (
                 <div className="px-3 py-2">
-                  <span className="text-lime-500 text-xs font-bold">✓ Changes saved successfully!</span>
+                  <span className="text-lime-500 text-xs font-bold">✓ Changes saved!</span>
                 </div>
               )}
 
@@ -668,7 +689,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-2 tracking-widest">RANK</div>
             <div className="flex justify-between items-center">
-              <div className="text-2xl text-gray-300 font-black font-mono">
+              <div className="text-2xl text-yellow-500 font-black font-mono">
                 {player.isGuest ? '—' : isLoadingRank ? '#' : globalRank ? `#${globalRank}` : '—'}
               </div>
             </div>

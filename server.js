@@ -1188,51 +1188,52 @@ app.post('/api/matchmaking/join-specific', async (req, res) => {
       // Don't fail - match is already created
     }
 
-    // Create activity logs for both players
+    // Create activity logs for both players (use player ID as fallback for guests without wallets)
     const { data: player1Data } = await supabase
       .from('players')
-      .select('wallet_address')
+      .select('wallet_address, username')
       .eq('id', targetPlayerId)
       .single();
 
     const { data: player2Data } = await supabase
       .from('players')
-      .select('wallet_address')
+      .select('wallet_address, username')
       .eq('id', playerId)
       .single();
 
-    if (player1Data?.wallet_address && player2Data?.wallet_address) {
-      // Log for target player (player1)
-      const { error: log1Error } = await supabase
-        .from('activity_logs')
-        .insert({
-          player_id: targetPlayerId,
-          wallet_address: player1Data.wallet_address,
-          activity_type: 'match_started',
-          details: { opponent_wallet: player2Data.wallet_address, wager_amount: 0 }
-        });
+    const p1Wallet = player1Data?.wallet_address || `guest_${targetPlayerId}`;
+    const p2Wallet = player2Data?.wallet_address || `guest_${playerId}`;
 
-      if (log1Error) {
-        console.error('❌ Failed to create activity log for player1:', log1Error);
-      } else {
-        console.log('✅ Activity log created for player1');
-      }
+    // Log for target player (player1)
+    const { error: log1Error } = await supabase
+      .from('activity_logs')
+      .insert({
+        player_id: targetPlayerId,
+        wallet_address: p1Wallet,
+        activity_type: 'match_started',
+        details: { opponent_wallet: p2Wallet, wager_amount: 0 }
+      });
 
-      // Log for joining player (player2)
-      const { error: log2Error } = await supabase
-        .from('activity_logs')
-        .insert({
-          player_id: playerId,
-          wallet_address: player2Data.wallet_address,
-          activity_type: 'match_started',
-          details: { opponent_wallet: player1Data.wallet_address, wager_amount: 0 }
-        });
+    if (log1Error) {
+      console.error('❌ Failed to create activity log for player1:', log1Error);
+    } else {
+      console.log('✅ Activity log created for player1');
+    }
 
-      if (log2Error) {
-        console.error('❌ Failed to create activity log for player2:', log2Error);
-      } else {
-        console.log('✅ Activity log created for player2');
-      }
+    // Log for joining player (player2)
+    const { error: log2Error } = await supabase
+      .from('activity_logs')
+      .insert({
+        player_id: playerId,
+        wallet_address: p2Wallet,
+        activity_type: 'match_started',
+        details: { opponent_wallet: p1Wallet, wager_amount: 0 }
+      });
+
+    if (log2Error) {
+      console.error('❌ Failed to create activity log for player2:', log2Error);
+    } else {
+      console.log('✅ Activity log created for player2');
     }
 
     return res.json({

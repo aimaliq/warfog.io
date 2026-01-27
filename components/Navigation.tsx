@@ -37,14 +37,14 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, onChange, isI
                 isInMatch
                   ? 'text-gray-500 hover:text-gray-400'
                   : activeTab === item.id
-                    ? 'text-lime-500'
+                    ? 'text-yellow-500'
                     : 'text-gray-400 hover:text-gray-300'
               }`}
             >
               <span className="material-icons-outlined text-2xl mt-2">{item.icon}</span>
               <span className="text-[11px] font-bold tracking-widest mb-3">{item.label}</span>
               {!isInMatch && activeTab === item.id && (
-                <div className="absolute bottom-0 w-12 h-2 bg-lime-500 shadow-[0_0_10px_rgba(163,230,53,0.5)]"></div>
+                <div className="absolute bottom-0 w-12 h-2 bg-yellow-500 shadow-[0_0_10px_rgba(163,230,53,0.5)]"></div>
               )}
             </button>
           ))}

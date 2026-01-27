@@ -89,18 +89,13 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                     key={entry.wallet || entry.rank}
                     className={`relative grid grid-cols-12 gap-2 sm:gap-4 px-2 sm:px-4 py-3 sm:py-4 hover:bg-lime-900/20 transition-all border-l-2 ${
                       isCurrentPlayer
-                        ? 'bg-lime-900/30 border-lime-400 shadow-[inset_0_0_20px_rgba(0,255,0,0.1)]'
+                        ? 'bg-yellow-700/20 border-yellow-400 shadow-[inset_0_0_20px_rgba(234,179,8,0.08)]'
                         : isTopThree
                         ? 'bg-lime-950/20 border-lime-700/30'
                         : 'border-transparent'
                     }`}
                   >
-                    {/* Tactical grid overlay for current player */}
-                    {isCurrentPlayer && (
-                      <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
-                        backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 10px, #00ff00 10px, #00ff00 11px)',
-                      }}></div>
-                    )}
+
 
                     <div className={`col-span-1 flex items-center justify-center font-black font-mono text-xs sm:text-base ml-2 ${rankColor}`}>
                       {isTopThree && <span className="mr-1">{rankBadge}</span>}
@@ -114,7 +109,6 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({ player }) => {
                       <div className="text-white text-[14px] sm:text-base font-mono tracking-wider">
                         {entry.username}
                       <div className="text-[11px] sm:text-[12px] text-lime-500 truncate font-mono tracking-wide">
-                        {isCurrentPlayer && <span className="text-yellow-500 mr-1">▸</span>}
                         {walletDisplay}
                       </div>
                       </div>

@@ -67,11 +67,26 @@ export const useActivityFeed = (wagerFilter?: 'free' | 'wagered') => {
 
                 // Fetch opponent's country code and username
                 if (opponent && opponent !== 'Unknown') {
-                  const { data: opponentData } = await supabase
-                    .from('players')
-                    .select('country_code, username, wallet_address')
-                    .eq('wallet_address', opponent)
-                    .single();
+                  let opponentData = null;
+
+                  if (opponent.startsWith('guest_')) {
+                    // Guest player - look up by player ID
+                    const guestId = opponent.replace('guest_', '');
+                    const { data } = await supabase
+                      .from('players')
+                      .select('country_code, username, wallet_address')
+                      .eq('id', guestId)
+                      .single();
+                    opponentData = data;
+                  } else {
+                    // Wallet player - look up by wallet address
+                    const { data } = await supabase
+                      .from('players')
+                      .select('country_code, username, wallet_address')
+                      .eq('wallet_address', opponent)
+                      .single();
+                    opponentData = data;
+                  }
 
                   opponentCountryCode = opponentData?.country_code || null;
 
@@ -98,8 +113,25 @@ export const useActivityFeed = (wagerFilter?: 'free' | 'wagered') => {
           })
         );
 
+        // Deduplicate battles: each match creates 2 logs (one per player), show only one
+        const seenBattles = new Set<string>();
+        const deduplicatedActivities = formattedActivities.filter((activity, index) => {
+          const original = data![index];
+          if (original.activity_type !== 'match_started') return true;
+
+          // Create a key from sorted player wallets + timestamp (within 5 sec window)
+          const wallet1 = original.wallet_address || '';
+          const wallet2 = original.details?.opponent_wallet || '';
+          const timeKey = Math.floor(new Date(original.created_at).getTime() / 5000); // 5-second window
+          const battleKey = [wallet1, wallet2].sort().join('|') + '|' + timeKey;
+
+          if (seenBattles.has(battleKey)) return false;
+          seenBattles.add(battleKey);
+          return true;
+        });
+
         // Apply wager filter if specified
-        let filteredActivities = formattedActivities;
+        let filteredActivities = deduplicatedActivities;
         if (wagerFilter) {
           filteredActivities = formattedActivities.filter((_, index) => {
             const originalActivity = data![index];

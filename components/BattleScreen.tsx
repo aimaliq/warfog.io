@@ -292,11 +292,22 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
         // Determine if current user is player1 or player2
         const isPlayer1 = gameState.player1.id === match.player1_id;
+        const isPlayer2 = gameState.player1.id === match.player2_id;
+
+        if (!isPlayer1 && !isPlayer2) {
+          // Player ID doesn't match either match player - ID may be stale (e.g., guest with "player1")
+          // Don't set matchDataLoaded so this effect re-runs when the ID updates
+          console.warn(`⚠️ Current player ID ${gameState.player1.id} doesn't match match players ${match.player1_id} / ${match.player2_id} - waiting for ID update`);
+          return;
+        }
+
+        const myData = isPlayer1 ? player1Data : player2Data;
         const opponentData = isPlayer1 ? player2Data : player1Data;
 
-        console.log(`✅ Loaded opponent: ${opponentData.username} (${opponentData.wallet_address?.slice(0, 8)}...)`);
+        console.log(`✅ I am ${isPlayer1 ? 'player1' : 'player2'}: ${myData.username} (${gameState.player1.id.slice(0, 8)}...)`);
+        console.log(`✅ Opponent: ${opponentData.username} (${opponentData.id.slice(0, 8)}...)`);
 
-        // Update game state with real opponent
+        // Update game state with real opponent data
         setGameState(prev => ({
           ...prev,
           player2: {
@@ -376,6 +387,17 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
             return {
               ...current,
+              player1: {
+                ...current.player1,
+                rating: applyRatingChange(current.player1.rating, playerRatingChange),
+                wins: current.player1.wins + (isPlayerWinner ? 1 : 0),
+                losses: current.player1.losses + (isPlayerWinner ? 0 : 1),
+                gamesPlayed: current.player1.gamesPlayed + 1,
+              },
+              player2: {
+                ...current.player2,
+                rating: applyRatingChange(current.player2.rating, enemyRatingChange),
+              },
               phase: GamePhase.GAME_OVER,
               winner: data.resignation.winnerId,
               winReason: 'OPPONENT_FORFEIT'
@@ -457,6 +479,17 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
             return {
               ...current,
+              player1: {
+                ...current.player1,
+                rating: applyRatingChange(current.player1.rating, playerRatingChange),
+                wins: current.player1.wins + (isPlayerWinner ? 1 : 0),
+                losses: current.player1.losses + (isPlayerWinner ? 0 : 1),
+                gamesPlayed: current.player1.gamesPlayed + 1,
+              },
+              player2: {
+                ...current.player2,
+                rating: applyRatingChange(current.player2.rating, enemyRatingChange),
+              },
               phase: GamePhase.GAME_OVER,
               winner: resignation.winnerId,
               winReason: 'OPPONENT_FORFEIT'
@@ -528,6 +561,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
     // Determine if current player is player1 or player2 in the match
     const isPlayer1 = gameState.player1.id === match.player1_id;
+    console.log(`🎮 isPlayer1=${isPlayer1}, myId=${gameState.player1.id}, match.p1=${match.player1_id}, match.p2=${match.player2_id}`);
 
     // Get silo HP arrays from server
     const playerSilos = isPlayer1 ? serverState.player1_silos : serverState.player2_silos;
@@ -683,17 +717,35 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
               const winReason = winner === 'TIE' ? 'TIE_HP' : 'BASES_DESTROYED';
 
               // Calculate rating changes
+              let updatedPlayer1 = current.player1;
+              let updatedPlayer2 = current.player2;
+
               if (winner !== 'TIE') {
                 const isPlayerWinner = winner === current.player1.id;
                 const playerRatingChange = calculateEloChange(current.player1.rating, current.player2.rating, isPlayerWinner);
                 const enemyRatingChange = calculateEloChange(current.player2.rating, current.player1.rating, !isPlayerWinner);
                 setRatingChanges({ player: playerRatingChange, enemy: enemyRatingChange });
+
+                // Update ratings locally (important for guest players whose ratings aren't updated server-side)
+                updatedPlayer1 = {
+                  ...current.player1,
+                  rating: applyRatingChange(current.player1.rating, playerRatingChange),
+                  wins: current.player1.wins + (isPlayerWinner ? 1 : 0),
+                  losses: current.player1.losses + (isPlayerWinner ? 0 : 1),
+                  gamesPlayed: current.player1.gamesPlayed + 1,
+                };
+                updatedPlayer2 = {
+                  ...current.player2,
+                  rating: applyRatingChange(current.player2.rating, enemyRatingChange),
+                };
               } else {
                 setRatingChanges(null);
               }
 
               return {
                 ...current,
+                player1: updatedPlayer1,
+                player2: updatedPlayer2,
                 phase: GamePhase.GAME_OVER,
                 winner,
                 winReason
@@ -1468,12 +1520,19 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
      const isFreeMatch = gameState.betAmount === 0;
      const isResignation = gameState.winReason === 'OPPONENT_FORFEIT';
 
+     console.log(`🏁 Game Over Screen: winner=${gameState.winner}, player.id=${player.id}, isWin=${isWin}, isDraw=${isDraw}`);
+
      // Calculate rating changes if not already set
      let displayRatingChanges = ratingChanges;
      if (!displayRatingChanges && !isDraw) {
        const playerRatingChange = calculateEloChange(player.rating, enemy.rating, isWin);
        const enemyRatingChange = calculateEloChange(enemy.rating, player.rating, !isWin);
        displayRatingChanges = { player: playerRatingChange, enemy: enemyRatingChange };
+     }
+
+     // Save last rating change to localStorage so PlayPage chart can display it accurately
+     if (displayRatingChanges) {
+       localStorage.setItem('warfog_last_rating_change', String(displayRatingChanges.player));
      }
 
      return (
