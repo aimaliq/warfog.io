@@ -706,7 +706,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                 <div className="flex-1">
                   <div className="text-lime-500 font-bold text-sm mb-1">ATTACK THE ENEMY</div>
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    Tap 3 red silos to attack. Each silo destroyed grants you +1 HP.
+                    Tap 3 red silos to attack.
                   </p>
                   <div>
                     <img
@@ -726,7 +726,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                 <div className="flex-1">
                   <div className="text-lime-500 font-bold text-sm mb-1">DEFEND YOUR SILOS</div>
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    Tap 2 green silos to defend from enemy missiles. If hit you lose -1 HP.
+                    Tap 2 green silos to defend.
                   </p>
                   <div>
                     <img
@@ -772,7 +772,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                 <div className="flex-1">
                   <div className="text-lime-500 font-bold text-sm mb-1">RATING SYSTEM</div>
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    Start with 500 rating. Win (+8), lose (-8), win as underdog (+12), lose as underdog (-4).
+                    Win battle (+8), lose battle (-8).
                   </p>
                 </div>
               </div>
@@ -795,7 +795,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                     disabled={isInBattle || queueStatus !== 'idle'}
                     className="w-full py-2 bg-blue-900/40 border border-blue-400 text-blue-400 font-bold text-md hover:bg-blue-900/60 transition-all rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    PLAY BOT
+                    PLAY BOT →
                   </button>
                 </div>
               </div>
