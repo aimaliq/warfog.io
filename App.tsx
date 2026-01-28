@@ -369,16 +369,16 @@ export default function App() {
 
   return (
     <div className="h-screen bg-terminal-bg text-terminal-green font-mono relative flex flex-col overflow-hidden">
-      {/* Background Grid Effect */}
+      {/* Background Grid Effect - z-0 keeps it behind content */}
       <div
-        className="absolute inset-0 opacity-10 pointer-events-none grid-scroll-overlay"
+        className="absolute inset-0 opacity-10 pointer-events-none grid-scroll-overlay z-0"
         style={{
           backgroundImage: 'linear-gradient(#a3e635 1px, transparent 1px), linear-gradient(90deg, #a3e635 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }}
       />
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-20 relative z-10">
         {renderContent()}
       </div>
 

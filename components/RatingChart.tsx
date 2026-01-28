@@ -21,7 +21,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
     const ticks = [480, 500, 520];
 
     return (
-      <div className="w-full bg-gray-900/80 border border-gray-700/30 rounded-3xl p-4">
+      <div className="w-full bg-gray-900 border border-gray-700/30 rounded-3xl p-4">
         {/* Header row */}
         <div className="flex items-start justify-between mb-1">
           <span className="text-gray-500 text-[10px] font-mono tracking-widest uppercase">YOUR RATING</span>
@@ -31,7 +31,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
         <div className="flex items-center mb-3">
           <span className="text-gray-300 font-black text-3xl font-mono">{currentRating}</span>
         </div>
-        <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+        <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible" style={{ backgroundColor: '#111827' }}>
           <defs>
             <linearGradient id="ratingGradientEmpty" x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stopColor="rgba(33, 189, 90, 0.15)" />
@@ -39,14 +39,11 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
             </linearGradient>
           </defs>
 
-          {/* Grid lines */}
+          {/* Y-axis labels only */}
           {ticks.map((tick, i) => {
             const y = pad.top + (h - pad.top - pad.bottom) - ((tick - 480) / 40) * (h - pad.top - pad.bottom);
             return (
-              <g key={i}>
-                <line x1={pad.left} y1={y} x2={w - pad.right} y2={y} stroke="rgba(33, 189, 90, 0.1)" strokeWidth="1" />
-                <text x={pad.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7280" fontFamily="monospace">{tick}</text>
-              </g>
+              <text key={i} x={pad.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7280" fontFamily="monospace">{tick}</text>
             );
           })}
 
@@ -110,7 +107,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
   });
 
   return (
-    <div className="w-full bg-gray-900/80 border border-gray-700/30 rounded-3xl p-4">
+    <div className="w-full bg-gray-900 border border-gray-700/30 rounded-3xl p-4">
       {/* Header row */}
       <div className="flex items-start justify-between mb-1">
         <span className="text-gray-500 text-[10px] font-mono tracking-widest uppercase">YOUR RATING</span>
@@ -120,7 +117,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
       <div className="flex items-center mb-3">
         <span className="text-gray-300 font-black text-3xl font-mono">{currentRating}</span>
         {ratingChange !== 0 && (
-          <span className={`ml-1 flex items-center font-bold text-sm ${ratingChange > 0 ? 'text-lime-400' : 'text-red-400'}`}>
+          <span className={`ml-1 flex items-center font-bold text-sm rating-change-pop ${ratingChange > 0 ? 'text-lime-400' : 'text-red-400'}`}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               {ratingChange > 0 ? (
                 <><path d="M7 7h10v10"/><path d="M7 17 17 7"/></>
@@ -134,7 +131,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
       </div>
 
       {/* SVG Chart */}
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="overflow-visible" style={{ backgroundColor: '#111827' }}>
         <defs>
           {/* Gradient for area fill */}
           <linearGradient id="ratingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -143,18 +140,6 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
           </linearGradient>
         </defs>
 
-        {/* Grid lines */}
-        {yTicks.map((tick, i) => (
-          <line
-            key={i}
-            x1={padding.left}
-            y1={tick.y}
-            x2={width - padding.right}
-            y2={tick.y}
-            stroke="rgba(33, 189, 90, 0.1)"
-            strokeWidth="1"
-          />
-        ))}
 
         {/* Area fill */}
         <path
@@ -182,6 +167,7 @@ export const RatingChart: React.FC<RatingChartProps> = ({ data, currentRating, l
               fill="#33e67d"
               stroke="#0a0f0a"
               strokeWidth="1.5"
+              className={`rating-point rating-point-${i}`}
             />
             {/* Highlight last point (current rating) */}
             {i === points.length - 1 && (

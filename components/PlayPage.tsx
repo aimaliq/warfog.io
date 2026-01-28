@@ -452,7 +452,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
       <div className="w-full max-w-2xl">
 
         {/* Header - Volume/Help Buttons (left) and Wallet Button (right) */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="flex items-center justify-between">
           {/* Left side buttons - Volume and Help */}
           <div className="flex items-center gap-3">
             {/* Volume Toggle Button */}
@@ -493,7 +493,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
           {/* Inline Username and Flag */}
           <div className="flex gap-3 items-center justify-center">
             {/* Username Input */}
-            <div className="flex-1 relative bg-gray-900/80 border border-gray-700/30 rounded-3xl px-4 pt-5 pb-2 focus-within:border-lime-500/30">
+            <div className="flex-1 relative bg-gray-900 border border-gray-700/30 rounded-3xl px-4 pt-5 pb-2 focus-within:border-lime-500/30">
               <label className="absolute top-1 left-4 text-[10px] text-gray-500 tracking-wider font-mono uppercase">Nickname</label>
               <input
                 type="text"
@@ -508,7 +508,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
             </div>
 
             {/* Flag Selector */}
-            <div className="relative bg-gray-900/80 border border-gray-700/30 rounded-3xl px-4 pt-5 pb-2 focus-within:border-lime-500/30">
+            <div className="relative bg-gray-900 border border-gray-700/30 rounded-3xl px-4 pt-5 pb-2 focus-within:border-lime-500/30">
               <label className="absolute top-1 left-4 text-[10px] text-gray-500 tracking-wider font-mono uppercase">Country</label>
               <div className="relative">
                 <select
@@ -541,7 +541,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
         {/* Battles activity Feed*/}
         <div className="bg-black/40 rounded-lg">
           <div className="px-4 py-3 flex items-center gap-2">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+            <span className="w-2 h-2 bg-red-500 rounded-full animate-ping-slow"></span>
             <h2 className="text-gray-300 font-bold text-sm tracking-widest font-mono">BATTLES</h2>
             <div className="gap-2">
               <span className="text-gray-400 text-xs font-mono">
@@ -676,7 +676,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
 
       {/* Tutorial Modal - First Time Only */}
       {showTutorialModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray/20 backdrop-blur-lg">
           <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-black border rounded-3xl border-gray-800 mx-4">
 
             {/* Close button */}
@@ -689,14 +689,12 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
 
             {/* Header */}
             <div className="px-4 py-4">
-              <h2 className="text-2xl font-bold text-yellow-400 text-left gap-2">
-                <span className="material-icons-outlined text-2xl mr-2">help_outline</span>
-                HOW TO PLAY
-              </h2>
+              <h3 className="text-xl font-bold text-yellow-400 text-center gap-2" style={{fontFamily: "'Orbitron', sans-serif" }}>
+                HOW TO PLAY</h3>
             </div>
 
             {/* Content - Reuse How to Play section */}
-            <div className="px-4 py-4 space-y-2">
+            <div className="px-4 py-2 space-y-2">
 
               {/* Step 1 */}
               <div className="flex gap-3">
@@ -787,18 +785,20 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
                   <p className="text-xs text-gray-400 leading-relaxed mb-3">
                     Practice the game against a bot.
                   </p>
+                </div>
+              </div>
+                <div className="px-4">
                   <button
                     onClick={() => {
                       closeTutorialModal();
                       handlePlayBot();
                     }}
                     disabled={isInBattle || queueStatus !== 'idle'}
-                    className="w-full py-2 bg-blue-900/40 border border-blue-400 text-blue-400 font-bold text-md hover:bg-blue-900/60 transition-all rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full mb-2 py-2 bg-blue-900/40 border border-blue-400 text-blue-400 font-bold text-md hover:bg-blue-900/60 transition-all rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     PLAY BOT →
                   </button>
                 </div>
-              </div>
             </div>
           </div>
         </div>
