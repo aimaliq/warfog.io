@@ -1919,7 +1919,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
         )}
 
         {/* Instructions */}
-        <div className={`bg-black/80 border px-4 py-1 font-bold tracking-widest backdrop-blur-sm text-center ${
+        <div className={`bg-black/80 border rounded-full px-4 py-1 font-bold tracking-widest backdrop-blur-sm text-center ${
           isAllocatingHP
             ? 'border-yellow-400 text-yellow-400 shadow-[0_0_30px_rgba(250,204,21,0.6)] animate-pulse text-sm md:text-base scale-110'
             : 'border-lime-500/50 text-lime-400 shadow-[0_0_20px_rgba(163,230,53,0.2)] text-[10px] md:text-xs'

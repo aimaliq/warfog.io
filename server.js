@@ -1386,17 +1386,45 @@ setInterval(async () => {
           })
           .eq('id', match.id);
 
-        // Update player stats
+        // Fetch both players' current ratings for Elo calculation
+        const { data: winnerData } = await supabase
+          .from('players')
+          .select('rating')
+          .eq('id', winnerId)
+          .single();
+
+        const { data: loserData } = await supabase
+          .from('players')
+          .select('rating')
+          .eq('id', abandonedPlayerId)
+          .single();
+
+        const winnerRating = winnerData?.rating || 500;
+        const loserRating = loserData?.rating || 500;
+
+        // Calculate Elo rating changes (K-factor = 16)
+        const K = 16;
+        const winnerExpected = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400));
+        const loserExpected = 1 / (1 + Math.pow(10, (winnerRating - loserRating) / 400));
+
+        const winnerRatingChange = Math.round(K * (1 - winnerExpected));
+        const loserRatingChange = Math.round(K * (0 - loserExpected));
+
+        console.log(`   📊 Rating changes (forfeit): Winner ${winnerRating} → ${winnerRating + winnerRatingChange} (+${winnerRatingChange}), Loser ${loserRating} → ${loserRating + loserRatingChange} (${loserRatingChange})`);
+
+        // Update player stats with rating changes
         await supabase.rpc('increment_player_stats', {
           p_player_id: winnerId,
           p_wins: 1,
-          p_losses: 0
+          p_losses: 0,
+          p_rating_change: winnerRatingChange
         });
 
         await supabase.rpc('increment_player_stats', {
           p_player_id: abandonedPlayerId,
           p_wins: 0,
-          p_losses: 1
+          p_losses: 1,
+          p_rating_change: loserRatingChange
         });
 
         console.log(`   ✅ Match ${match.id} completed (forfeit)`);
@@ -1803,17 +1831,45 @@ app.get('/api/game/state/:matchId', async (req, res) => {
           })
           .eq('id', matchId);
 
-        // Update player stats
+        // Fetch both players' current ratings for Elo calculation
+        const { data: winnerData } = await supabase
+          .from('players')
+          .select('rating')
+          .eq('id', winnerId)
+          .single();
+
+        const { data: loserData } = await supabase
+          .from('players')
+          .select('rating')
+          .eq('id', resignedPlayerId)
+          .single();
+
+        const winnerRating = winnerData?.rating || 500;
+        const loserRating = loserData?.rating || 500;
+
+        // Calculate Elo rating changes (K-factor = 16)
+        const K = 16;
+        const winnerExpected = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400));
+        const loserExpected = 1 / (1 + Math.pow(10, (winnerRating - loserRating) / 400));
+
+        const winnerRatingChange = Math.round(K * (1 - winnerExpected));
+        const loserRatingChange = Math.round(K * (0 - loserExpected));
+
+        console.log(`📊 Rating changes (resignation): Winner ${winnerRating} → ${winnerRating + winnerRatingChange} (+${winnerRatingChange}), Loser ${loserRating} → ${loserRating + loserRatingChange} (${loserRatingChange})`);
+
+        // Update player stats with rating changes
         await supabase.rpc('increment_player_stats', {
           p_player_id: winnerId,
           p_wins: 1,
-          p_losses: 0
+          p_losses: 0,
+          p_rating_change: winnerRatingChange
         });
 
         await supabase.rpc('increment_player_stats', {
           p_player_id: resignedPlayerId,
           p_wins: 0,
-          p_losses: 1
+          p_losses: 1,
+          p_rating_change: loserRatingChange
         });
 
         // Refetch updated match
