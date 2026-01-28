@@ -687,7 +687,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
           </div>
 
           <div className="bg-black/60 p-4">
-            <div className="text-[11px] text-gray-400 mb-2 tracking-widest">RANK</div>
+            <div className="text-[11px] text-gray-400 mb-1 tracking-widest">RANK</div>
             <div className="flex justify-between items-center">
               <div className="text-2xl text-yellow-500 font-black font-mono">
                 {player.isGuest ? '—' : isLoadingRank ? '#' : globalRank ? `#${globalRank}` : '—'}
@@ -703,7 +703,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ player, onPlayerUpdate
 
           <div className="bg-black/60 p-4">
             <div className="text-[11px] text-gray-400 mb-1 tracking-widest">RATING</div>
-            <div className="text-2xl text-yellow-500 font-black font-mono">{player.rating || 500}</div>
+            <div className="text-2xl text-gray-300 font-black font-mono">{player.rating || 500}</div>
           </div>
 
           {/* Row 2: Victories, SOL Won, Win Rate */}

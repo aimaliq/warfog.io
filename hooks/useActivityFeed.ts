@@ -133,9 +133,10 @@ export const useActivityFeed = (wagerFilter?: 'free' | 'wagered') => {
         // Apply wager filter if specified
         let filteredActivities = deduplicatedActivities;
         if (wagerFilter) {
-          filteredActivities = formattedActivities.filter((_, index) => {
-            const originalActivity = data![index];
-            const wager = originalActivity.details?.wager_amount || 0;
+          filteredActivities = deduplicatedActivities.filter((activity) => {
+            // Find original activity by id
+            const originalActivity = data!.find(d => d.id === activity.id);
+            const wager = originalActivity?.details?.wager_amount || 0;
 
             if (wagerFilter === 'free') {
               return wager === 0;

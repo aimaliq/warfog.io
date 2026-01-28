@@ -136,7 +136,7 @@ const DamageNotification = ({ count, isPlayer }: { count: number; isPlayer: bool
       className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 animate-float-up pointer-events-none"
     >
       <div className={`text-2xl font-black ${isPlayer ? 'text-lime-500' : 'text-red-500'} drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]`}>
-        {count} SILO{count > 1 ? 'S' : ''} {isPlayer ? 'LOST' : 'DESTROYED'}
+        {count} SILO{count > 1 ? 'S' : ''} {isPlayer ? 'DESTROYED' : 'LOST'}
       </div>
     </div>
   );
