@@ -168,7 +168,7 @@ const BaseIcon = ({
     <div
       onClick={canClick ? onClick : undefined}
       className={`
-        relative w-16 h-24 md:w-24 md:h-32 border-2 flex flex-col items-center justify-center
+        relative w-16 h-24 md:w-24 md:h-32 border-2 rounded-lg flex flex-col items-center justify-center
         transition-all duration-300 overflow-hidden
         ${visuallyDestroyed
           ? 'border-gray-800 bg-gray-900/50 opacity-60 cursor-not-allowed'
@@ -191,7 +191,7 @@ const BaseIcon = ({
           {[...Array(2)].map((_, i) => (
             <div
               key={i}
-              className={`h-1 flex-1 transition-all duration-300 ${
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
                 i < base.hp ? 'bg-lime-500' : 'bg-gray-800'
               }`}
             />
@@ -249,6 +249,41 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
   // Rating change tracking
   const [ratingChanges, setRatingChanges] = useState<{ player: number; enemy: number } | null>(null);
+
+  // HP damage tracking for health bar effects
+  const prevPlayerHPRef = useRef<number>(player.totalHP);
+  const prevEnemyHPRef = useRef<number>(enemy.totalHP);
+  const playerGhostTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enemyGhostTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [playerGhostHP, setPlayerGhostHP] = useState<number>(player.totalHP);
+  const [enemyGhostHP, setEnemyGhostHP] = useState<number>(enemy.totalHP);
+  const [playerHPHit, setPlayerHPHit] = useState(false);
+  const [enemyHPHit, setEnemyHPHit] = useState(false);
+
+  // Detect HP changes and trigger health bar effects
+  useEffect(() => {
+    // Player damage detection
+    if (player.totalHP < prevPlayerHPRef.current) {
+      setPlayerHPHit(true);
+      if (playerGhostTimeoutRef.current) clearTimeout(playerGhostTimeoutRef.current);
+      playerGhostTimeoutRef.current = setTimeout(() => setPlayerGhostHP(player.totalHP), 1000);
+      setTimeout(() => setPlayerHPHit(false), 600);
+    } else if (player.totalHP > prevPlayerHPRef.current) {
+      setPlayerGhostHP(player.totalHP);
+    }
+    prevPlayerHPRef.current = player.totalHP;
+
+    // Enemy damage detection
+    if (enemy.totalHP < prevEnemyHPRef.current) {
+      setEnemyHPHit(true);
+      if (enemyGhostTimeoutRef.current) clearTimeout(enemyGhostTimeoutRef.current);
+      enemyGhostTimeoutRef.current = setTimeout(() => setEnemyGhostHP(enemy.totalHP), 1000);
+      setTimeout(() => setEnemyHPHit(false), 600);
+    } else if (enemy.totalHP > prevEnemyHPRef.current) {
+      setEnemyGhostHP(enemy.totalHP);
+    }
+    prevEnemyHPRef.current = enemy.totalHP;
+  }, [player.totalHP, enemy.totalHP]);
 
   // Load real opponent data when matchId exists
   useEffect(() => {
@@ -1437,7 +1472,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
           <div className="relative mt-2">
             <div className="flex justify-center gap-2 md:gap-6">
               {enemy.bases.map(base => (
-                <div key={base.id} className="relative w-16 h-24 md:w-24 md:h-32 border-2 border-red-900/30 bg-black flex flex-col items-center justify-center">
+                <div key={base.id} className="relative w-16 h-24 md:w-24 md:h-32 border-2 border-red-900/30 rounded-lg bg-black flex flex-col items-center justify-center">
                   <div className="text-5xl md:text-6xl animate-spin-slow text-red-700">☢</div>
                   <div className="absolute bottom-1 right-1 text-[8px] font-mono text-red-800">S-{base.id}</div>
                 </div>
@@ -1459,11 +1494,8 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
 
         {/* Center Text */}
         <div className="flex flex-col items-center justify-center gap-3 w-full z-20 my-2">
-          <div className="bg-black/90 border-2 border-yellow-400 px-4 py-2 md:px-6 md:py-3 text-yellow-400 font-black text-lg md:text-xl tracking-widest shadow-[0_0_40px_rgba(250,204,21,0.6)] animate-conflict-pulse">
+          <div className="bg-black/90 border-2 rounded-xl border-yellow-400 px-4 py-2 md:px-6 md:py-3 text-yellow-400 font-black text-lg md:text-xl tracking-widest shadow-[0_0_40px_rgba(250,204,21,0.6)] animate-conflict-pulse">
             CONFLICT IMMINENT...
-          </div>
-          <div className="text-gray-600 text-xs tracking-wider">
-            INITIALIZING TACTICAL SYSTEMS
           </div>
         </div>
 
@@ -1485,10 +1517,10 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
           <div className="relative mb-2">
             <div className="flex justify-center gap-2 md:gap-6">
               {player.bases.map(base => (
-                <div key={base.id} className="relative w-16 h-24 md:w-24 md:h-32 border-2 border-lime-900 bg-black flex flex-col items-center justify-center">
+                <div key={base.id} className="relative w-16 h-24 md:w-24 md:h-32 border-2 border-lime-900 rounded-lg bg-black flex flex-col items-center justify-center">
                   <div className="absolute top-1 left-1 right-1 flex gap-0.5">
                     {[...Array(2)].map((_, i) => (
-                      <div key={i} className="h-1 flex-1 bg-lime-500" />
+                      <div key={i} className="h-1 flex-1 rounded-full bg-lime-500" />
                     ))}
                   </div>
                   <div className="text-5xl md:text-6xl animate-spin-slow text-lime-500 mt-3">☢</div>
@@ -1845,13 +1877,19 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
         <div className="w-full max-w-md mx-auto">
           <div className="flex justify-between items-center mb-1">
             <span className="text-[10px] text-red-700 font-bold tracking-wider mt-2">ENEMY INTEGRITY:</span>
-            <span className="text-[11px] text-red-500 font-bold font-mono mt-2">{enemy.totalHP * 10}%</span>
+            <span className={`text-[11px] text-red-500 font-bold font-mono mt-2 ${enemyHPHit ? 'animate-hp-text-pop' : ''}`}>{enemy.totalHP * 10}%</span>
           </div>
-          <div className="w-full h-1.5 bg-gray-900 border border-red-900/50 relative">
+          <div className={`w-full h-2.5 bg-gray-900 border border-red-900/50 relative overflow-hidden rounded-full ${enemyHPHit ? 'animate-hp-bar-shake' : ''}`}>
+            {/* Ghost bar - shows previous HP, shrinks with delay */}
             <div
-              className="h-full bg-gradient-to-r from-red-900 to-red-500 transition-all duration-500"
+              className="absolute top-0 left-0 h-full bg-red-400/40 transition-all duration-700 ease-out rounded-full"
+              style={{ width: `${Math.max(0, enemyGhostHP * 10)}%` }}
+            />
+            {/* Main HP bar */}
+            <div
+              className={`relative h-full bg-gradient-to-r from-red-900 to-red-500 transition-all duration-500 rounded-full ${enemyHPHit ? 'animate-hp-flash' : ''}`}
               style={{ width: `${Math.max(0, enemy.totalHP * 10)}%` }}
-            ></div>
+            />
           </div>
         </div>
         <div className="flex justify-between items-center mt-2">
@@ -1862,7 +1900,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
-                  className={`w-4 h-4 border border-red-900 flex items-center justify-center overflow-visible relative ${
+                  className={`w-4 h-4 border border-red-900 rounded-sm flex items-center justify-center overflow-visible relative ${
                     i < enemyDestroyedCount ? 'bg-red-900/50' : 'bg-black'
                   } ${
                     highlightedIcons.enemy.includes(i) ? 'animate-box-pulse-enemy' : ''
@@ -1936,13 +1974,19 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
         <div className="w-full max-w-md mx-auto">
           <div className="flex justify-between items-center mb-1">
             <span className="text-[10px] text-lime-700 font-bold tracking-wider mt-2">SYSTEMS INTEGRITY:</span>
-            <span className="text-[11px] text-lime-500 font-bold font-mono mt-2">{player.totalHP * 10}%</span>
+            <span className={`text-[11px] text-lime-500 font-bold font-mono mt-2 ${playerHPHit ? 'animate-hp-text-pop' : ''}`}>{player.totalHP * 10}%</span>
           </div>
-          <div className="w-full h-1.5 bg-gray-900 border border-lime-900/50 relative">
+          <div className={`w-full h-2.5 bg-gray-900 border border-lime-900/50 relative overflow-hidden rounded-full ${playerHPHit ? 'animate-hp-bar-shake' : ''}`}>
+            {/* Ghost bar - shows previous HP, shrinks with delay */}
             <div
-              className="h-full bg-gradient-to-r from-lime-900 to-lime-500 transition-all duration-500"
+              className="absolute top-0 left-0 h-full bg-lime-400/40 transition-all duration-700 ease-out rounded-full"
+              style={{ width: `${Math.max(0, playerGhostHP * 10)}%` }}
+            />
+            {/* Main HP bar */}
+            <div
+              className={`relative h-full bg-gradient-to-r from-lime-900 to-lime-500 transition-all duration-500 rounded-full ${playerHPHit ? 'animate-hp-flash' : ''}`}
               style={{ width: `${Math.max(0, player.totalHP * 10)}%` }}
-            ></div>
+            />
           </div>
         </div>
         <div className="flex justify-between items-center mt-2 mb-3">
@@ -1953,7 +1997,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
-                  className={`w-4 h-4 border border-lime-900 flex items-center justify-center overflow-visible relative ${
+                  className={`w-4 h-4 border border-lime-900 rounded-sm flex items-center justify-center overflow-visible relative ${
                     i < playerDestroyedCount ? 'bg-lime-900/50' : 'bg-black'
                   } ${
                     highlightedIcons.player.includes(i) ? 'animate-box-pulse-player' : ''

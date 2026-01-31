@@ -697,95 +697,53 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
             <div className="px-4 py-2 space-y-2">
 
               {/* Step 1 */}
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">1</span>
                 </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">ATTACK THE ENEMY</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Tap 3 red silos to attack.
-                  </p>
-                  <div>
-                    <img
-                      src="/attack-mechanics.gif"
-                      alt="Attack mechanics"
-                      className="w-full rounded-md"
-                    />
-                  </div>
-                </div>
+                <p className="text-sm text-gray-400">Tap 3 red silos to attack.</p>
               </div>
+              <img src="/attack-mechanics.gif" alt="Attack mechanics" className="w-full rounded-md" />
 
               {/* Step 2 */}
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">2</span>
                 </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">DEFEND YOUR SILOS</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Tap 2 green silos to defend.
-                  </p>
-                  <div>
-                    <img
-                      src="/defend-mechanics.gif"
-                      alt="Defend mechanics"
-                      className="w-full rounded-md"
-                    />
-                  </div>
-                </div>
+                <p className="text-sm text-gray-400">Tap 2 green silos to defend.</p>
               </div>
+              <img src="/defend-mechanics.gif" alt="Defend mechanics" className="w-full rounded-md" />
 
               {/* Step 3 */}
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">3</span>
                 </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">DESTROY 3 TO WIN</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Destroy 3 silos to win the battle.
-                  </p>
-                </div>
+                <p className="text-sm text-gray-400">Destroy 3 silos to win the battle.</p>
               </div>
 
               {/* Step 4 */}
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">4</span>
                 </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">10-SECOND TURNS</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Fast decisions. No time for caution.
-                  </p>
-                </div>
+                <p className="text-sm text-gray-400">10-sec turns = Fast decisions.</p>
               </div>
 
               {/* Step 5 - Rating System */}
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">5</span>
                 </div>
-                <div className="flex-1">
-                  <div className="text-lime-500 font-bold text-sm mb-1">RATING SYSTEM</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Win battle (+8), lose battle (-8).
-                  </p>
-                </div>
+                <p className="text-sm text-gray-400">Win battle (+8), lose battle (-8).</p>
               </div>
 
               {/* Step 6 - Play Against Bot */}
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3 mb-5">
                 <div className="flex-shrink-0 w-8 h-8 bg-blue-900/40 border rounded-md border-blue-500 flex items-center justify-center">
                   <span className="material-icons-outlined text-blue-400 text-sm">smart_toy</span>
                 </div>
-                <div className="flex-1">
-                  <div className="text-blue-400 font-bold text-sm mb-1">PRACTICE</div>
-                  <p className="text-xs text-gray-400 leading-relaxed mb-3">
-                    Practice the game against a bot.
-                  </p>
-                </div>
+                <p className="text-sm text-gray-400">Practice the game against a bot.</p>
               </div>
                 <div className="px-4">
                   <button
