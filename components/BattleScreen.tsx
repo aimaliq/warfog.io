@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GameState, GamePhase, Base, Player } from '../types';
+import { GameState, GamePhase, Base, Player, SuperPowerType } from '../types';
 import { FlagIcon } from './FlagIcon';
 import { supabase, updateLastPlayedAt, calculateEloChange, applyRatingChange } from '../lib/supabase';
 
@@ -148,7 +148,8 @@ const BaseIcon = ({
   isSelected,
   onClick,
   mode,
-  isGlowing
+  isGlowing,
+  showEnemyHP
 }: {
   base: Base;
   isOwn: boolean;
@@ -156,9 +157,10 @@ const BaseIcon = ({
   onClick: () => void;
   mode: 'attack' | 'defense' | 'heal';
   isGlowing?: boolean;
+  showEnemyHP?: boolean;
 }) => {
-  // Fog of War: Enemy bases always appear "alive" to hide their HP
-  const visuallyDestroyed = isOwn && base.isDestroyed;
+  // Fog of War: Enemy bases appear "alive" to hide their HP (unless UAV is active)
+  const visuallyDestroyed = isOwn ? base.isDestroyed : (showEnemyHP && base.isDestroyed);
   const visuallyActive = !visuallyDestroyed;
 
   // Can click if it's enemy (even if destroyed) or own (if not destroyed)
@@ -185,14 +187,14 @@ const BaseIcon = ({
         ${canClick ? 'cursor-pointer' : 'cursor-not-allowed'}
       `}
     >
-      {/* HP Bar - Only visible for own bases */}
-      {isOwn && (
+      {/* HP Bar - Visible for own bases or when UAV reveals enemy HP */}
+      {(isOwn || showEnemyHP) && (
         <div className="absolute top-1 left-1 right-1 flex gap-0.5">
           {[...Array(2)].map((_, i) => (
             <div
               key={i}
               className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                i < base.hp ? 'bg-lime-500' : 'bg-gray-800'
+                i < base.hp ? (isOwn ? 'bg-lime-500' : 'bg-red-500') : 'bg-gray-800'
               }`}
             />
           ))}
@@ -659,6 +661,23 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
           enemyStartIndex: enemyDestroyedBefore
         });
 
+        // Check super power unlock (when enemy integrity hits 50%)
+        const enemyIntegrityPercent = (enemyTotalHP / 10) * 100;
+        const playerIntegrityPercent = (playerTotalHP / 10) * 100;
+
+        const updatedPlayer1SuperPower = { ...current.player1.superPower };
+        const updatedPlayer2SuperPower = { ...current.player2.superPower };
+
+        // Unlock player's super power if enemy is at or below 50% HP
+        if (enemyIntegrityPercent <= 50 && !updatedPlayer1SuperPower.isUnlocked && !updatedPlayer1SuperPower.isUsed) {
+          updatedPlayer1SuperPower.isUnlocked = true;
+        }
+
+        // Unlock enemy's super power if player is at or below 50% HP
+        if (playerIntegrityPercent <= 50 && !updatedPlayer2SuperPower.isUnlocked && !updatedPlayer2SuperPower.isUsed) {
+          updatedPlayer2SuperPower.isUnlocked = true;
+        }
+
         return {
           ...current,
           player1: {
@@ -666,14 +685,16 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
             bases: newPlayerBases,
             basesDestroyed: playerDestroyed,
             totalHP: playerTotalHP,
-            pendingHP: playerPendingHP // Set from server
+            pendingHP: playerPendingHP, // Set from server
+            superPower: updatedPlayer1SuperPower,
           },
           player2: {
             ...current.player2,
             bases: newEnemyBases,
             basesDestroyed: enemyDestroyed,
             totalHP: enemyTotalHP,
-            pendingHP: enemyPendingHP // Set from server
+            pendingHP: enemyPendingHP, // Set from server
+            superPower: updatedPlayer2SuperPower,
           },
           phase: GamePhase.RESOLVING,
           currentTurn: serverState.current_turn
@@ -816,6 +837,10 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
   const [highlightedIcons, setHighlightedIcons] = useState<{ player: number[], enemy: number[] }>({ player: [], enemy: [] });
   const [iconsShrinking, setIconsShrinking] = useState<{ player: number[], enemy: number[] }>({ player: [], enemy: [] });
 
+  // Super power activation state
+  const [usingSuperAttack, setUsingSuperAttack] = useState(false);
+  const [usingUAV, setUsingUAV] = useState(false);
+
   // Timer pop animation state
   const [lastSecond, setLastSecond] = useState(-1);
   const [isPopping, setIsPopping] = useState(false);
@@ -859,6 +884,22 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
     if (gameState.phase === GamePhase.PLANNING) {
       setSelectedDefenses([]);
       setSelectedTargets([]);
+      setUsingSuperAttack(false);
+
+      // Reset UAV active state at the start of each turn (fog of war returns)
+      if (player.superPower.uavActive) {
+        setGameState(prev => ({
+          ...prev,
+          player1: {
+            ...prev.player1,
+            superPower: {
+              ...prev.player1.superPower,
+              uavActive: false
+            }
+          }
+        }));
+      }
+      setUsingUAV(false);
 
       // Update last_played_at when game starts
       updateLastPlayedAt(player.id);
@@ -874,6 +915,39 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
       }
     }
   }, [gameState.phase, gameState.currentTurn, player.pendingHP, player.id, enemy.id]);
+
+  // Handle super power selection - activates immediately on click
+  const handleSuperPowerSelect = useCallback((power: SuperPowerType) => {
+    if (power === SuperPowerType.SUPER_ATTACK) {
+      setGameState(prev => ({
+        ...prev,
+        player1: {
+          ...prev.player1,
+          superPower: {
+            ...prev.player1.superPower,
+            selectedPower: power,
+          }
+        }
+      }));
+      setUsingSuperAttack(true);
+      setSelectedTargets([]);
+      setMessage("🚀 SELECT 1 TARGET FOR SUPER ATTACK");
+    } else if (power === SuperPowerType.UAV) {
+      setGameState(prev => ({
+        ...prev,
+        player1: {
+          ...prev.player1,
+          superPower: {
+            ...prev.player1.superPower,
+            selectedPower: power,
+            uavActive: true
+          }
+        }
+      }));
+      setUsingUAV(true);
+      setMessage("🛰️ UAV ACTIVE - ENEMY INTEL REVEALED");
+    }
+  }, [setGameState]);
 
   // Play beep sound using Web Audio API with ascending pitch based on time remaining
   const playBeep = useCallback((timeLeftMs: number) => {
@@ -1147,9 +1221,10 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
       }
     } else {
       // Attack selection
+      const maxTargets = usingSuperAttack ? 1 : 3;
       if (selectedTargets.includes(baseId)) {
         setSelectedTargets(prev => prev.filter(id => id !== baseId));
-      } else if (selectedTargets.length < 3) {
+      } else if (selectedTargets.length < maxTargets) {
         setSelectedTargets(prev => [...prev, baseId]);
       }
     }
@@ -1223,25 +1298,62 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
           });
 
           // Player Attacks Enemy
-          selectedTargets.forEach(targetId => {
-              const base = nextEnemy.bases[targetId];
-              if (base && !enemyShields.includes(targetId) && !base.isDestroyed) {
-                  base.hp -= 1;
-                  if (base.hp <= 0) {
-                      base.isDestroyed = true;
-                      base.hp = 0;
-                      nextEnemy.basesDestroyed += 1;
-                      nextEnemy.totalHP -= 2;
-                      playerBasesDestroyedThisTurn += 1;
-                  } else {
-                      nextEnemy.totalHP -= 1;
-                  }
-              }
-          });
+          if (usingSuperAttack && selectedTargets.length > 0) {
+            // Super Attack: 1 missile, breaks defense, 10 damage (destroys silo completely)
+            const targetId = selectedTargets[0];
+            const base = nextEnemy.bases[targetId];
+            if (base && !base.isDestroyed) {
+              // Super Attack deals 10 damage (full silo HP) and ignores defense
+              const damageDealt = base.hp; // Track how much HP the base had
+              base.hp = 0;
+              base.isDestroyed = true;
+              nextEnemy.basesDestroyed += 1;
+              nextEnemy.totalHP -= damageDealt;
+              playerBasesDestroyedThisTurn += 1;
+            }
+            // Mark super power as used
+            nextPlayer.superPower = { ...nextPlayer.superPower, isUsed: true };
+          } else {
+            // Normal attack: 3 missiles, -1 HP each, can be defended
+            selectedTargets.forEach(targetId => {
+                const base = nextEnemy.bases[targetId];
+                if (base && !enemyShields.includes(targetId) && !base.isDestroyed) {
+                    base.hp -= 1;
+                    if (base.hp <= 0) {
+                        base.isDestroyed = true;
+                        base.hp = 0;
+                        nextEnemy.basesDestroyed += 1;
+                        nextEnemy.totalHP -= 2;
+                        playerBasesDestroyedThisTurn += 1;
+                    } else {
+                        nextEnemy.totalHP -= 1;
+                    }
+                }
+            });
+          }
+
+          // Deactivate UAV after turn resolves
+          if (usingUAV) {
+            nextPlayer.superPower = { ...nextPlayer.superPower, isUsed: true, uavActive: false };
+          }
 
           // Award HP gifts for destroyed bases
           nextPlayer.pendingHP += playerBasesDestroyedThisTurn;
           nextEnemy.pendingHP += enemyBasesDestroyedThisTurn;
+
+          // Check super power unlock (when enemy integrity hits 50%)
+          const enemyIntegrityPercent = (nextEnemy.totalHP / 10) * 100;
+          const playerIntegrityPercent = (nextPlayer.totalHP / 10) * 100;
+
+          // Unlock player's super power if enemy is at or below 50% HP
+          if (enemyIntegrityPercent <= 50 && !nextPlayer.superPower.isUnlocked && !nextPlayer.superPower.isUsed) {
+            nextPlayer.superPower = { ...nextPlayer.superPower, isUnlocked: true };
+          }
+
+          // Unlock enemy's super power if player is at or below 50% HP
+          if (playerIntegrityPercent <= 50 && !nextEnemy.superPower.isUnlocked && !nextEnemy.superPower.isUsed) {
+            nextEnemy.superPower = { ...nextEnemy.superPower, isUnlocked: true };
+          }
 
           // Store destruction counts AND previous indices for notifications
           setLastTurnDestructions({
@@ -1869,6 +1981,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
                 isSelected={selectedTargets.includes(base.id)}
                 onClick={() => handleSiloClick(base.id, false)}
                 mode="attack"
+                showEnemyHP={player.superPower.uavActive}
               />
             ))}
           </div>
@@ -1964,6 +2077,55 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
         }`}>
           {message}
         </div>
+
+        {/* Super Power Usage Buttons - After selection (shown below message) */}
+        {gameState.phase === GamePhase.PLANNING && !isAllocatingHP && player.superPower.selectedPower && !player.superPower.isUsed && (
+          <div className="flex justify-center gap-2 mt-2">
+            {player.superPower.selectedPower === SuperPowerType.SUPER_ATTACK && (
+              <button
+                onClick={() => {
+                  setUsingSuperAttack(true);
+                  setSelectedTargets([]);
+                  setMessage("🚀 SELECT 1 TARGET FOR SUPER ATTACK");
+                }}
+                disabled={usingSuperAttack}
+                className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                  usingSuperAttack
+                    ? 'bg-red-500/50 border-2 border-red-400 text-white shadow-[0_0_20px_rgba(239,68,68,0.8)] scale-105'
+                    : 'bg-red-900/30 border-2 border-red-600 text-red-400 hover:bg-red-900/50 hover:scale-105'
+                }`}
+              >
+                {usingSuperAttack ? '⚡ SUPER ATTACK ACTIVE' : '🚀 USE SUPER ATTACK'}
+              </button>
+            )}
+            {player.superPower.selectedPower === SuperPowerType.UAV && (
+              <button
+                onClick={() => {
+                  setUsingUAV(true);
+                  setGameState(prev => ({
+                    ...prev,
+                    player1: {
+                      ...prev.player1,
+                      superPower: {
+                        ...prev.player1.superPower,
+                        uavActive: true
+                      }
+                    }
+                  }));
+                  setMessage("🛰️ UAV ACTIVE - ENEMY INTEL REVEALED");
+                }}
+                disabled={usingUAV}
+                className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
+                  usingUAV
+                    ? 'bg-blue-500/50 border-2 border-blue-400 text-white shadow-[0_0_20px_rgba(59,130,246,0.8)] scale-105'
+                    : 'bg-blue-900/30 border-2 border-blue-600 text-blue-400 hover:bg-blue-900/50 hover:scale-105'
+                }`}
+              >
+                {usingUAV ? '🛰️ UAV ACTIVE' : '🛰️ USE UAV RECON'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* --- BOTTOM SECTION: PLAYER --- */}
@@ -2036,14 +2198,70 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
           </div>
         </div>
 
-        {/* Player Info */}
-        <div className="flex justify-between items-end px-1 mt-1">
+        {/* Player Info + Super Power */}
+        <div className="flex justify-between items-center px-1 mt-1">
           <div className="flex items-center gap-3">
             <FlagIcon countryCode={player.countryFlag} width="48px" height="32px" />
             <div>
               <div className="text-lime-500 font-bold text-sm tracking-wider">{player.username}</div>
               <div className="text-[12px] text-yellow-400 font-bold font-mono">⚡ {player.rating || 500}</div>
             </div>
+          </div>
+
+          {/* Super Power Section (Right Side) */}
+          <div className="flex items-center gap-2">
+            {!player.superPower.isUsed && !player.superPower.isUnlocked && (
+              <>
+                <span className="text-[12px] text-yellow-600 font-bold tracking-wider">⚡BOOST</span>
+                <div className="flex gap-1">
+                  {[...Array(5)].map((_, i) => {
+                    const progress = Math.min(100, Math.max(0, (100 - (enemy.totalHP / 10) * 100) * 2));
+                    const sectionThreshold = (i + 1) * 20;
+                    const isActive = progress >= sectionThreshold;
+                    return (
+                      <div
+                        key={i}
+                        className={`w-3 h-8 rounded-sm border transition-all duration-300 ${
+                          isActive
+                            ? 'bg-gradient-to-t from-orange-600 to-yellow-400 border-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)]'
+                            : 'bg-gray-900 border-gray-700'
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {player.superPower.isUnlocked && !player.superPower.selectedPower && !player.superPower.isUsed && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSuperPowerSelect(SuperPowerType.SUPER_ATTACK)}
+                  className="px-3 py-1.5 bg-red-900/40 border border-red-500 rounded text-[11px] font-bold text-red-400 hover:scale-105 transition-all animate-pulse hover:shadow-[0_0_15px_rgba(239,68,68,0.6)]"
+                >
+                  🚀 ATTACK
+                </button>
+                <button
+                  onClick={() => handleSuperPowerSelect(SuperPowerType.UAV)}
+                  className="px-3 py-1.5 bg-blue-900/40 border border-blue-500 rounded text-[11px] font-bold text-blue-400 hover:scale-105 transition-all animate-pulse hover:shadow-[0_0_15px_rgba(59,130,246,0.6)]"
+                >
+                  🛰️ UAV
+                </button>
+              </div>
+            )}
+            {player.superPower.selectedPower && !player.superPower.isUsed && (
+              <div className={`px-2 py-1 rounded border text-[11px] font-bold ${
+                player.superPower.selectedPower === SuperPowerType.SUPER_ATTACK
+                  ? 'bg-red-900/30 border-red-500 text-red-400'
+                  : 'bg-blue-900/30 border-blue-500 text-blue-400'
+              }`}>
+                {player.superPower.selectedPower === SuperPowerType.SUPER_ATTACK ? '🚀 READY' : '🛰️ READY'}
+              </div>
+            )}
+            {player.superPower.isUsed && (
+              <div className="px-2 py-1 bg-gray-900/50 border border-gray-500 rounded text-[12px] text-gray-500 font-bold">
+                ⚡ USED
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2073,6 +2291,7 @@ export default function BattleScreen({ gameState, setGameState, matchId, onRefre
           )}
         </>
       )}
+
     </div>
   );
 }

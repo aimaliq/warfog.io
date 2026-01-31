@@ -8,6 +8,57 @@ import { useActivityFeed } from '../hooks/useActivityFeed';
 import { useOnlinePlayers } from '../hooks/useOnlinePlayers';
 import { RatingChart } from './RatingChart';
 
+// Animated Silo Component for Tutorial
+const TutorialSilo = ({ isSelected, isEnemy, delay = 0 }: { isSelected: boolean; isEnemy: boolean; delay?: number }) => {
+  return (
+    <div
+      className={`relative w-12 h-16 md:w-16 md:h-20 border-2 rounded-lg flex flex-col items-center justify-center transition-all duration-300 ${
+        isSelected
+          ? isEnemy
+            ? 'border-red-500 bg-red-900/20 shadow-[0_0_15px_rgba(239,68,68,0.4)] scale-105 animate-pulse'
+            : 'border-lime-400 bg-lime-900/20 shadow-[0_0_15px_rgba(163,230,53,0.4)] scale-105 animate-pulse'
+          : isEnemy
+            ? 'border-red-900/30 bg-black'
+            : 'border-lime-900 bg-black'
+      }`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      {/* HP Bar */}
+      <div className="absolute top-1 left-1 right-1 flex gap-0.5">
+        {[...Array(2)].map((_, i) => (
+          <div
+            key={i}
+            className={`h-1 flex-1 rounded-full ${isEnemy ? 'bg-red-900' : 'bg-lime-500'}`}
+          />
+        ))}
+      </div>
+
+      {/* Selection Label */}
+      {isSelected && (
+        <div className={`absolute top-0 left-0 right-0 text-[10px] font-bold text-center py-0.5 z-10 ${
+          isEnemy ? 'bg-red-500 text-black' : 'bg-lime-500 text-black'
+        }`}>
+          {isEnemy ? 'ATTACK' : 'SHIELD'}
+        </div>
+      )}
+
+      {/* Silo Icon */}
+      <div className={`text-4xl md:text-5xl animate-spin-slow ${
+        isEnemy ? (isSelected ? 'text-red-400' : 'text-red-700') : 'text-lime-500'
+      }`}>
+        ☢
+      </div>
+
+      {/* Base ID */}
+      <div className={`absolute bottom-1 right-1 text-[8px] font-mono ${
+        isEnemy ? 'text-red-800' : 'text-lime-800'
+      }`}>
+        S-0
+      </div>
+    </div>
+  );
+};
+
 const COUNTRY_CODES = [
   'us', 'gb', 'ca', 'au', 'de', 'fr', 'it', 'es', 'nl', 'se',
   'no', 'dk', 'fi', 'pl', 'ru', 'jp', 'cn', 'kr', 'in', 'br',
@@ -696,26 +747,38 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
             {/* Content - Reuse How to Play section */}
             <div className="px-4 py-2 space-y-2">
 
-              {/* Step 1 */}
+              {/* Step 1 - Attack */}
               <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">1</span>
                 </div>
                 <p className="text-sm text-gray-400">Tap 3 red silos to attack.</p>
               </div>
-              <img src="/attack-mechanics.gif" alt="Attack mechanics" className="w-full rounded-md" />
+              <div className="bg-black/40 p-4 flex justify-center gap-2">
+                <TutorialSilo isSelected={true} isEnemy={true} delay={0} />
+                <TutorialSilo isSelected={true} isEnemy={true} delay={200} />
+                <TutorialSilo isSelected={true} isEnemy={true} delay={400} />
+                <TutorialSilo isSelected={false} isEnemy={true} />
+                <TutorialSilo isSelected={false} isEnemy={true} />
+              </div>
 
-              {/* Step 2 */}
+              {/* Step 2 - Defense */}
               <div className="flex items-center gap-3">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">2</span>
                 </div>
                 <p className="text-sm text-gray-400">Tap 2 green silos to defend.</p>
               </div>
-              <img src="/defend-mechanics.gif" alt="Defend mechanics" className="w-full rounded-md" />
+              <div className="bg-black/40 p-4 flex justify-center gap-2">
+                <TutorialSilo isSelected={true} isEnemy={false} delay={0} />
+                <TutorialSilo isSelected={false} isEnemy={false} />
+                <TutorialSilo isSelected={true} isEnemy={false} delay={200} />
+                <TutorialSilo isSelected={false} isEnemy={false} />
+                <TutorialSilo isSelected={false} isEnemy={false} />
+              </div>
 
               {/* Step 3 */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 py-1">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">3</span>
                 </div>
@@ -723,7 +786,7 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
               </div>
 
               {/* Step 4 */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 py-1">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">4</span>
                 </div>
@@ -731,15 +794,25 @@ export const PlayPage: React.FC<PlayPageProps> = ({ player, onStartBattle, onPla
               </div>
 
               {/* Step 5 - Rating System */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 py-1">
                 <div className="flex-shrink-0 w-8 h-8 bg-lime-900/40 border rounded-md border-lime-500 flex items-center justify-center">
                   <span className="text-lime-500 font-black text-sm">5</span>
                 </div>
                 <p className="text-sm text-gray-400">Win battle (+8), lose battle (-8).</p>
               </div>
 
-              {/* Step 6 - Play Against Bot */}
-              <div className="flex items-center gap-3 mb-5">
+              {/* Step 6 - Super Powers */}
+              <div className="flex items-center gap-3 py-1">
+                <div className="flex-shrink-0 w-8 h-8 bg-yellow-900/40 border rounded-md border-yellow-500 flex items-center justify-center">
+                  <span className="text-yellow-500 font-black text-sm">⚡</span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-400">Unlock boost: Super Attack or UAV.</p>
+                </div>
+              </div>
+
+              {/* Step 7 - Play Against Bot */}
+              <div className="flex items-center gap-3 mb-5 py-1">
                 <div className="flex-shrink-0 w-8 h-8 bg-blue-900/40 border rounded-md border-blue-500 flex items-center justify-center">
                   <span className="material-icons-outlined text-blue-400 text-sm">smart_toy</span>
                 </div>

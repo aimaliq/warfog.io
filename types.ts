@@ -7,6 +7,18 @@ export interface Base {
   isDestroyed: boolean; // true when hp === 0
 }
 
+export enum SuperPowerType {
+  SUPER_ATTACK = 'SUPER_ATTACK', // 1 missile that breaks defense, 10 damage
+  UAV = 'UAV' // Reveals enemy HP and destroyed silos for 1 turn
+}
+
+export interface SuperPowerState {
+  isUnlocked: boolean; // Unlocks when enemy integrity hits 50%
+  isUsed: boolean; // True after player uses their super power
+  selectedPower: SuperPowerType | null; // Which power the player chose
+  uavActive: boolean; // True for the turn UAV is active (shows enemy info)
+}
+
 export interface Player {
   id: string;
   walletAddress?: string; // Optional for guest mode
@@ -25,6 +37,9 @@ export interface Player {
 
   // HP allocation
   pendingHP: number; // HP gifts to allocate (0-2)
+
+  // Super powers
+  superPower: SuperPowerState;
 
   // Stats
   wins: number;
